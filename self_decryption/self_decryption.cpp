@@ -12,6 +12,8 @@
 #define MAGIC volatile uint64_t m = 0x88ff88ff88ff88ffL;\
 _mm_sfence()
 
+#define _max(x, y) ((x) > (y)) ? (x) : (y)
+
 const char* line_a = "Text A";
 const char* line_b = "Text B";
 
@@ -102,21 +104,23 @@ ptrdiff_t get_func_length(void* f_ptr) {
 void decrypt_run_encrypt(decrypt_data* data, uint64_t page_size) {
     uint8_t* f_page_addr = (uint8_t*)data->f_ptr;
     f_page_addr = (uint8_t*)((uint64_t)f_page_addr & ~(page_size - 1));
+    uint64_t fsize = data->f_sz + (uint64_t)((uint8_t*)data->f_ptr - f_page_addr);
+    fsize = _max(fsize, page_size);
     DWORD dwOldProtect;
 
     //decyper
-    VirtualProtect(f_page_addr, page_size, PAGE_EXECUTE_READWRITE, &dwOldProtect);
+    VirtualProtect(f_page_addr, fsize, PAGE_EXECUTE_READWRITE, &dwOldProtect);
     decrypt(data);
-    VirtualProtect(f_page_addr, page_size, dwOldProtect, NULL);
+    VirtualProtect(f_page_addr, fsize, dwOldProtect, NULL);
 
     // run
     void(*func)() = (void(*)())data->f_ptr;
     func();
 
     //cypher
-    VirtualProtect(f_page_addr, page_size, PAGE_EXECUTE_READWRITE, &dwOldProtect);
+    VirtualProtect(f_page_addr, fsize, PAGE_EXECUTE_READWRITE, &dwOldProtect);
     encrypt(data);
-    VirtualProtect(f_page_addr, page_size, dwOldProtect, NULL);
+    VirtualProtect(f_page_addr, fsize, dwOldProtect, NULL);
 }
 
 __declspec(noinline) void init_decrypt_data(decrypt_data* data, int32_t* seed) {
@@ -126,7 +130,6 @@ __declspec(noinline) void init_decrypt_data(decrypt_data* data, int32_t* seed) {
     data[0].f_sz = (uint64_t)get_func_length((void*)foo);
     data[1].f_sz = (uint64_t)get_func_length((void*)bar);
     librandom::simple rnd_gen;
-    assert(NUM_FUNCS == (_countof(seed)));
     for (int i = 0; i < NUM_FUNCS; i++) {
         rnd_gen.seed(seed[i]);
         for (int j = 0; j < NUM_CYCLES; j++) {
