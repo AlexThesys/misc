@@ -45,7 +45,7 @@ r2.cmd("/x " + magic)
 line = str(r2.cmd("s hit0_0"))
 addr = int(line.split()[0], 16) - 0x2
 r2.cmd("af @ " + hex(addr))
-json = r2.cmdj("pdj " + str(num_funcs) + " @ " + hex(addr+0xa+0x3+0x8))
+json = r2.cmdj("pdj " + str(num_funcs) + " @ " + hex(addr+0xa+0x3+0x5+0x3+0x3))
 func_addr = []
 for d in json:
     for key, value in d.items():
@@ -59,7 +59,8 @@ if (len(func_addr) != num_funcs):
     print("Not all the functions found!")
     exit()
 r2.cmd("wx 90909090909090909090 @ " + hex(addr))
-r2.cmd("wx 9090909090909090 @ " + hex(addr + 0xA + 0x3))
+r2.cmd("wx 9090909090 @ " + hex(addr + 0xA + 0x3))
+r2.cmd("wx 909090 @ " + hex(addr+0xa+0x3+0x5+0x3))
 k = 0
 for fa in func_addr:
     r2.cmd("af @ " + hex(fa))

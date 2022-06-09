@@ -15,11 +15,7 @@ _mm_sfence()
 const char* line_a = "Text A";
 const char* line_b = "Text B";
 
-enum seed {
-    seed_a = 0x7facacac,
-    seed_b = 0x00bdbdbd
-};
-const int32_t seed[] = {seed_a, seed_b};
+extern int get_keys(int argc, char** argv, int32_t* keys);
 
 __declspec(noinline) void __cdecl foo() {
     // some code
@@ -126,7 +122,7 @@ void decrypt_run_encrypt(decrypt_data* data) {
     VirtualProtect(f_page_addr, page_size, dwOldProtect, NULL);
 }
 
-__declspec(noinline) void init_decrypt_data(decrypt_data* data) {
+__declspec(noinline) void init_decrypt_data(decrypt_data* data, int32_t* seed) {
     MAGIC;
     data[0].f_ptr = (void*)foo;
     data[1].f_ptr = (void*)bar;
@@ -142,12 +138,15 @@ __declspec(noinline) void init_decrypt_data(decrypt_data* data) {
     }
 }
 
-int main() {
+int main(int argc, char** argv) {
     HANDLE t_handle = CreateThread(nullptr, 0x1000, check_dbg, nullptr, STACK_SIZE_PARAM_IS_A_RESERVATION, nullptr);
     Sleep(500);
 
+    int32_t seed[2];
+    get_keys(argc, argv, seed);
+
     decrypt_data data[NUM_FUNCS];
-    init_decrypt_data(data);
+    init_decrypt_data(data, seed);
 
     decrypt_run_encrypt(&data[0]);
     decrypt_run_encrypt(&data[1]);
