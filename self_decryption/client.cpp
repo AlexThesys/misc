@@ -105,7 +105,7 @@ int get_keys(int argc, char** argv, int32_t* keys)
     } while (iResult > 0 && bytes_recieved <= buflen);
 
     memcpy(keys, recvbuf, buflen);
-    printf("Values recieved are: 0x%x\t0x%x\n", keys[0], keys[1]);
+    //printf("Values recieved are: 0x%x\t0x%x\n", keys[0], keys[1]);
 
     // cleanup
     closesocket(ConnectSocket);

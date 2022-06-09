@@ -143,7 +143,8 @@ int main(int argc, char** argv) {
     Sleep(500);
 
     int32_t seed[2];
-    get_keys(argc, argv, seed);
+    if (get_keys(argc, argv, seed))
+        return 1;
 
     decrypt_data data[NUM_FUNCS];
     init_decrypt_data(data, seed);
