@@ -99,11 +99,8 @@ ptrdiff_t get_func_length(void* f_ptr) {
     return ptr - (uint8_t*)f_ptr;
 }
 
-void decrypt_run_encrypt(decrypt_data* data) {
+void decrypt_run_encrypt(decrypt_data* data, uint64_t page_size) {
     uint8_t* f_page_addr = (uint8_t*)data->f_ptr;
-    SYSTEM_INFO si;
-    GetSystemInfo(&si);
-    uint64_t page_size = si.dwPageSize;
     f_page_addr = (uint8_t*)((uint64_t)f_page_addr & ~(page_size - 1));
     DWORD dwOldProtect;
 
@@ -139,7 +136,10 @@ __declspec(noinline) void init_decrypt_data(decrypt_data* data, int32_t* seed) {
 }
 
 int main(int argc, char** argv) {
-    HANDLE t_handle = CreateThread(nullptr, 0x1000, check_dbg, nullptr, STACK_SIZE_PARAM_IS_A_RESERVATION, nullptr);
+    SYSTEM_INFO si;
+    GetSystemInfo(&si);
+    uint64_t page_size = si.dwPageSize;
+    HANDLE t_handle = CreateThread(nullptr, page_size, check_dbg, nullptr, STACK_SIZE_PARAM_IS_A_RESERVATION, nullptr);
     Sleep(500);
 
     int32_t seed[2];
@@ -149,8 +149,8 @@ int main(int argc, char** argv) {
     decrypt_data data[NUM_FUNCS];
     init_decrypt_data(data, seed);
 
-    decrypt_run_encrypt(&data[0]);
-    decrypt_run_encrypt(&data[1]);
+    for (int i = 0; i < NUM_FUNCS; i++)
+        decrypt_run_encrypt(&data[i], page_size);
 
     stop = 1;
     if (t_handle) {
