@@ -101,6 +101,7 @@ ptrdiff_t get_func_length(void* f_ptr) {
     return ptr - (uint8_t*)f_ptr;
 }
 
+template<typename func_t>
 void decrypt_run_encrypt(decrypt_data* data, uint64_t page_size) {
     uint8_t* f_page_addr = (uint8_t*)data->f_ptr;
     f_page_addr = (uint8_t*)((uint64_t)f_page_addr & ~(page_size - 1));
@@ -114,8 +115,8 @@ void decrypt_run_encrypt(decrypt_data* data, uint64_t page_size) {
     VirtualProtect(f_page_addr, fsize, dwOldProtect, NULL);
 
     // run
-    void(*func)() = (void(*)())data->f_ptr;
-    func();
+    func_t f = (func_t)data->f_ptr;
+    f();
 
     //cypher
     VirtualProtect(f_page_addr, fsize, PAGE_EXECUTE_READWRITE, &dwOldProtect);
@@ -153,7 +154,7 @@ int main(int argc, char** argv) {
     init_decrypt_data(data, seed);
 
     for (int i = 0; i < NUM_FUNCS; i++)
-        decrypt_run_encrypt(&data[i], page_size);
+        decrypt_run_encrypt<void(*)()>(&data[i], page_size);
 
     stop = 1;
     if (t_handle) {
