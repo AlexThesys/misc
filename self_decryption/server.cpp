@@ -18,15 +18,38 @@
 
 enum seed {
     seed_a = 0x7facacac,
-    seed_b = 0x00bdbdbd
+    seed_b = 0x00bdbdbd,
+
+    error_keys = 0xFFFFFFFF,
 };
-const int32_t seed[NUM_FUNCS] = { seed_a, seed_b };
+const int32_t keys[NUM_FUNCS] = { seed_a, seed_b };
+const int32_t error[NUM_FUNCS] = { error_keys, error_keys };
 static constexpr int buflen = sizeof(int32_t) * NUM_FUNCS;
 
-int __cdecl main(void)
+int32_t load_hashsum_from_file(char** argv) {
+    FILE* f = nullptr;
+
+    if (fopen_s(&f, argv[1], "r") || !f) {
+        puts("Could not open file!");
+        return -1;
+    }
+    int dummy, hashsum;
+    fscanf_s(f, "%x %x", &dummy, &hashsum);
+    fclose(f);
+    printf("CRC32: 0x%x\n", hashsum);
+    return hashsum;
+}
+
+int __cdecl main(int argc, char** argv)
 {
+    if (argc < 2) {
+        puts("Please provide the file path!");
+        return -1;
+    }
+
     WSADATA wsaData;
     int iResult;
+    alignas(sizeof(int32_t)) char recvbuf[sizeof(int32_t)];
 
     SOCKET ListenSocket = INVALID_SOCKET;
     SOCKET ClientSocket = INVALID_SOCKET;
@@ -96,7 +119,16 @@ int __cdecl main(void)
     // No longer need server socket
     closesocket(ListenSocket);
 
-    // Send an initial buffer
+    do {
+        iResult = recv(ClientSocket, recvbuf, sizeof(recvbuf), 0);
+        if (iResult > 0)
+            printf("Bytes received: %d\n", iResult);
+    } while (iResult > 0);
+
+    const int32_t *seed = (*(int*)recvbuf == load_hashsum_from_file(argv)) ? keys : error;
+
+
+    // Send the keys
     iResult = send(ClientSocket, (const char*)seed, buflen, 0);
     if (iResult == SOCKET_ERROR) {
         printf("send failed with error: %d\n", WSAGetLastError());

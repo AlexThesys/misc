@@ -78,6 +78,32 @@ for fa in func_addr:
                 hex_str = hex_data.hex()
                 print("Encrypted hex string written: " + hex_str)
                 r2.cmd("wx " + hex_str + " @ " + hex(fa))
+             
+json = r2.cmdj("iSj")
+vaddr = 0
+vsize = 0
+print("Section .text info:")
+for d in json:
+    finish = False
+    for key, value in d.items():
+        if key == "name" and value == ".text":
+            finish = True
+        if key == "vsize":
+            vsize = hex(value)
+            print("vsize = " + vsize)
+        if key == "vaddr":
+            vaddr = hex(value)
+            print("vaddr = " + vaddr)
+            break
+    if finish == True:
+        break
+            
+hashsum = r2.cmd("ph crc32 " + vsize + " @ " + vaddr)
+print("crc32 of section text = 0x" + hashsum)
+f = open("bindata.txt", "w")
+f.writelines([vsize, " 0x", hashsum])
+f.close()
+
 r2.quit()
     
     

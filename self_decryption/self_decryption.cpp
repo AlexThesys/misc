@@ -9,6 +9,8 @@
 
 #define NUM_FUNCS 2
 #define NUM_CYCLES 16
+#define KEY_ERROR 0xFFFFFFFF
+
 #define MAGIC volatile uint64_t m = 0x88ff88ff88ff88ffL;\
 _mm_sfence()
 
@@ -17,7 +19,9 @@ _mm_sfence()
 const char* line_a = "Text A";
 const char* line_b = "Text B";
 
-extern int get_keys(int argc, char** argv, int32_t* keys);
+extern int get_keys(int argc, char** argv, int32_t* keys, char* hashsum, int hash_sz);
+
+static int32_t calculate_text_crc32c();
 
 __declspec(noinline) void __cdecl foo() {
     // some code
@@ -146,8 +150,12 @@ int main(int argc, char** argv) {
     HANDLE t_handle = CreateThread(nullptr, page_size, check_dbg, nullptr, STACK_SIZE_PARAM_IS_A_RESERVATION, nullptr);
     Sleep(500);
 
+    const int32_t hashsum = calculate_text_crc32c();
+    if (hashsum == -1)
+        return 1;
+    printf("CRC32 of section .text: 0x%x\n", hashsum);
     int32_t seed[2];
-    if (get_keys(argc, argv, seed))
+    if (get_keys(argc, argv, seed, (char*)&hashsum, sizeof(int32_t)) || (seed[0] && seed[1] == KEY_ERROR))
         return 1;
 
     decrypt_data data[NUM_FUNCS];
@@ -163,4 +171,40 @@ int main(int argc, char** argv) {
     }
 
     return 0;
+}
+
+typedef INT(WINAPI* undoc_func)(INT accum_CRC32, const BYTE* buffer, UINT buflen);
+static undoc_func get_crc32_func_addr() {
+    HMODULE h_dll = GetModuleHandle(TEXT("ntdll.dll"));
+    if (h_dll == NULL)
+    {
+        puts("Failed to find ntdll.dll\n");
+        return nullptr;
+    }
+    puts("Got ntdll.dll handle\n");
+
+    undoc_func compute_crc32 = (undoc_func)GetProcAddress(h_dll, "RtlComputeCrc32");
+    if (compute_crc32 == NULL) {
+        puts("Failed to find RtlComputeCrc32\n");
+    }
+    return compute_crc32;
+}
+
+static int32_t calculate_text_crc32c() {
+    FILE* f = nullptr; 
+    
+    if (fopen_s(&f, "bindata.txt", "r") || !f) {
+        puts("Could not open file!");
+        return -1;
+    }
+    int text_size = 0;
+    fscanf_s(f, "%x", &text_size);
+    fclose(f);
+    if (!text_size)
+        return -1;
+    const BYTE *text_addr = (const BYTE*)((int64_t)main & ~(int64_t)(0x1000 - 1));
+    undoc_func compute_crc32 = get_crc32_func_addr();
+    if (!compute_crc32)
+        return -1;
+    return compute_crc32(INT(0), text_addr, text_size);
 }

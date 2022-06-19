@@ -18,14 +18,13 @@
 
 static constexpr int buflen = sizeof(int32_t) * NUM_FUNCS;
 
-int get_keys(int argc, char** argv, int32_t* keys)
+int get_keys(int argc, char** argv, int32_t* keys, char* hashsum, int hash_sz)
 {
     WSADATA wsaData;
     SOCKET ConnectSocket = INVALID_SOCKET;
     struct addrinfo* result = NULL,
         * ptr = NULL,
         hints;
-    const char* sendbuf = "this is a test";
     char recvbuf[buflen];
     int iResult;
     int recvbuflen = buflen;
@@ -85,6 +84,26 @@ int get_keys(int argc, char** argv, int32_t* keys)
 
     if (ConnectSocket == INVALID_SOCKET) {
         printf("Unable to connect to server!\n");
+        WSACleanup();
+        return 1;
+    }
+
+    // Send an initial buffer
+    iResult = send(ConnectSocket, hashsum, hash_sz, 0);
+    if (iResult == SOCKET_ERROR) {
+        printf("send failed with error: %d\n", WSAGetLastError());
+        closesocket(ConnectSocket);
+        WSACleanup();
+        return 1;
+    }
+
+    printf("Bytes Sent: %ld\n", iResult);
+
+    // shutdown the connection since no more data will be sent
+    iResult = shutdown(ConnectSocket, SD_SEND);
+    if (iResult == SOCKET_ERROR) {
+        printf("shutdown failed with error: %d\n", WSAGetLastError());
+        closesocket(ConnectSocket);
         WSACleanup();
         return 1;
     }
