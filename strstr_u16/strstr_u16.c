@@ -28,18 +28,18 @@ static const u16* _strstr_u16_simd_(const u16* str, u32 str_sz, const u16* subst
     for (u32 j = 0, sz = str_sz - substr_sz; j <= sz; j += step) {
         const u16 *f = str + j;
         const u16 *l = str + j + substr_sz - 1;
-        __m256i xmm0 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(f));
-        __m256i xmm1 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(l));
+        __m256i ymm0 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(f));
+        __m256i ymm1 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(l));
 
-        xmm0 = _mm256_cmpeq_epi16(first, xmm0);
-        xmm1 = _mm256_cmpeq_epi16(last, xmm1);
-        xmm0 = _mm256_and_si256(xmm0, xmm1);
+        ymm0 = _mm256_cmpeq_epi16(first, ymm0);
+        ymm1 = _mm256_cmpeq_epi16(last, ymm1);
+        ymm0 = _mm256_and_si256(ymm0, ymm1);
 
-        u32 mask = _mm256_movemask_epi8(xmm0);
+        u32 mask = _mm256_movemask_epi8(ymm0);
 
         const u32 max_offset = _min(step, str_sz - (j + substr_sz) + 1);
         const u32 max_offset_mask = (1 << (max_offset + max_offset)) - 1;
-        constexpr u32 word_mask = 0x00005555;
+        constexpr u32 word_mask = 0x55555555;
         mask &= word_mask & max_offset_mask;
         unsigned long bit = 0;
 
