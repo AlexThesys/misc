@@ -70,8 +70,8 @@ void vec_mat_mul(fp32* res, const T* tensor, const fp32* vector, u32 height, u32
 		__m256 rem_vec = _mm256_loadu_ps(&vector[rem_offset]);
 		constexpr u32 step_128_sz_fp16 = sizeof(__m128i) / sizeof(fp16);
 		__m128i rem_mask = _mm_load_si128((__m128i*)rem_mask_128_16[rem]);
+		fp16* t_row = (fp16*)tensor;
 		for (u32 w = 0; w < width; w++) {
-			fp16* t_row = (fp16*)&tensor[w * height];
 			fp32* out	= &res[w];
 			__m256 accum_256 = _mm256_setzero_ps();
 			const fp32 *vs = vector;
@@ -98,13 +98,14 @@ void vec_mat_mul(fp32* res, const T* tensor, const fp32* vector, u32 height, u32
 			shuf = _mm_movehl_ps(shuf, sums);
 			sums = _mm_add_ss(sums, shuf);
 			*out = _mm_cvtss_f32(sums);
+			t_row += height;
 		}
 	} else {
 		__m256i rem_mask = _mm256_load_si256((__m256i*)rem_mask_256[rem]);
 		__m256 rem_vec = _mm256_maskload_ps(&vector[rem_offset], rem_mask);
+		fp32* t_row = (fp32*)tensor;
 		for (u32 w = 0; w < width; w++) {
-			fp32* t_row = (fp32*)&tensor[w * height];
-			fp32* out = &res[w];
+				fp32* out = &res[w];
 			__m256 accum256 = _mm256_setzero_ps();
 			const fp32* vs = vector;
 			for (u32 h = 0; h < height_trunc; h += step_sz_256_fp32) {
@@ -127,6 +128,7 @@ void vec_mat_mul(fp32* res, const T* tensor, const fp32* vector, u32 height, u32
 			shuf = _mm_movehl_ps(shuf, sums);
 			sums = _mm_add_ss(sums, shuf);
 			*out = _mm_cvtss_f32(sums);
+			t_row += height;
 		}
 	}
 #else // __SSE2__ version
@@ -140,8 +142,8 @@ void vec_mat_mul(fp32* res, const T* tensor, const fp32* vector, u32 height, u32
 	const u32 rem_offset = height_trunc - (step_sz_128_fp32 - rem);
 	__m128 rem_vec = _mm_loadu_ps(&vector[rem_offset]);
 	rem_vec = _mm_and_ps(rem_vec, *(__m128*)&rem_mask);
+	fp32* t_row = (fp32*)tensor;
 	for (u32 w = 0; w < width; w++) {
-		fp32* t_row = (fp32*)&tensor[w * height];
 		fp32* out = (fp32*)&res[w];
 		__m128 accum = _mm_setzero_ps();
 		const fp32* vs = vector;
@@ -162,6 +164,7 @@ void vec_mat_mul(fp32* res, const T* tensor, const fp32* vector, u32 height, u32
 		shuf = _mm_movehl_ps(shuf, sums);
 		sums = _mm_add_ss(sums, shuf);
 		*out = _mm_cvtss_f32(sums);
+		t_row += height;
 	}
 #endif
 }
