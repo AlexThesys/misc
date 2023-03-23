@@ -97,7 +97,7 @@ void vec_mat_mul(fp32* res, const T* tensor, const fp32* vector, u32 height, u32
 			__m128 sums = _mm_add_ps(accum, shuf);
 			shuf = _mm_movehl_ps(shuf, sums);
 			sums = _mm_add_ss(sums, shuf);
-			*out += _mm_cvtss_f32(sums);
+			*out = _mm_cvtss_f32(sums);
 		}
 	} else {
 		__m256i rem_mask = _mm256_load_si256((__m256i*)rem_mask_256[rem]);
@@ -126,7 +126,7 @@ void vec_mat_mul(fp32* res, const T* tensor, const fp32* vector, u32 height, u32
 			__m128 sums = _mm_add_ps(accum, shuf);
 			shuf = _mm_movehl_ps(shuf, sums);
 			sums = _mm_add_ss(sums, shuf);
-			*out += _mm_cvtss_f32(sums);
+			*out = _mm_cvtss_f32(sums);
 		}
 	}
 #else // __SSE2__ version
@@ -161,7 +161,7 @@ void vec_mat_mul(fp32* res, const T* tensor, const fp32* vector, u32 height, u32
 		__m128 sums = _mm_add_ps(accum, shuf);
 		shuf = _mm_movehl_ps(shuf, sums);
 		sums = _mm_add_ss(sums, shuf);
-		*out += _mm_cvtss_f32(sums);
+		*out = _mm_cvtss_f32(sums);
 	}
 #endif
 }
