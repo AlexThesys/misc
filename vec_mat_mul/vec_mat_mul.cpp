@@ -55,7 +55,8 @@ void vec_mat_mul(fp32* res, const T* tensor, const fp32* vector, u32 height, u32
 	const u32 rem_offset = height_trunc - (step_sz_256_fp32 - rem);
 	if (is_half_float) { // compile time branch
 		constexpr u32 step_128_sz_fp16 = sizeof(__m128i) / sizeof(fp16);
-		__m256 rem_vec = _mm256_maskload_ps(&vector[rem_offset], *(__m256i*)&rem_mask_256[rem]);
+		const __m256i rem_mask = _mm256_load_si256((__m256i*)rem_mask_256[rem]);
+		__m256 rem_vec = _mm256_maskload_ps(&vector[rem_offset], rem_mask);
 		fp16* t_row = (fp16*)tensor;
 		for (u32 w = 0; w < width; w++) {
 			fp32* out	= &res[w];
