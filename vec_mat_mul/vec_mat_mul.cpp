@@ -56,7 +56,6 @@ static const alignas(alignof(__m256i)) u32 rem_mask_256[8][8] = {
 template <typename T>
 void vec_mat_mul(fp32* res, const T* tensor, const fp32* vector, u32 height, u32 width) {	// height == row, width = col
 	constexpr bool is_half_float = (sizeof(T) == sizeof(fp16));
-	constexpr u32 bits_in_byte = 8;
 #ifdef __AVX__
 	static_assert(sizeof(T) == sizeof(fp16) || sizeof(T) == sizeof(fp32), "Unsupported type");
 	assert(0 == ((u64)vector & (sizeof(__m256) - 1)));
