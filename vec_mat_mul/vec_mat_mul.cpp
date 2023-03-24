@@ -112,7 +112,7 @@ void vec_mat_mul(fp32* res, const T* tensor, const fp32* vector, u32 height, u32
 	assert(0 == ((u64)res & (sizeof(__m128) - 1)));
 	constexpr u32 step_sz_128_fp32 = sizeof(__m128) / sizeof(fp32);
 	const u32 rem = height & (step_sz_128_fp32 - 1); // [0:3]
-	const __m128i rem_mask = _mm_load_si128((__m128i*)rem_mask_table[rem]);
+	const __m128i rem_mask = _mm_load_si128((__m128i*)&rem_mask_table[rem][sizeof(__m128i)]);
 	const u32 height_trunc = height - rem;
 	const u32 rem_offset = height_trunc - (step_sz_128_fp32 - rem);
 	__m128 rem_vec = _mm_loadu_ps(&vector[rem_offset]);
