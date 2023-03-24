@@ -5,10 +5,13 @@
 #include <stdio.h>
 #include <immintrin.h>
 #include <random>
+#include <string.h>
 
+#ifndef __AVX__
 #define __AVX__
+#endif
 #ifdef __AVX__
-//#define USE_HALF_FLOAT
+#define USE_HALF_FLOAT
 #endif // __AVX__
 
 
@@ -46,8 +49,6 @@ inline fp32 horizontal_add(const __m128& accum) {
 template <typename T>
 void vec_mat_mul(fp32* res, const T* tensor, const fp32* vector, u32 height, u32 width) {	// height == row, width = col
 	constexpr bool is_half_float = (sizeof(T) == sizeof(fp16));
-	constexpr u32 bits_in_byte = 8;
-	memset(res, 0, sizeof(fp32) * width);
 #ifdef __AVX__
 	static_assert(sizeof(T) == sizeof(fp16) || sizeof(T) == sizeof(fp32), "Unsupported type");
 	assert(0 == ((u64)vector & (sizeof(__m256) - 1)));
