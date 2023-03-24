@@ -20,7 +20,11 @@ typedef int32_t s32;
 typedef uint32_t u32;
 typedef uint64_t u64;
 
-static const alignas(alignof(__m256i)) u32 rem_mask_table[8][8] = {
+static constexpr u32 stride_avx = sizeof(__m256) / sizeof(fp32);
+static constexpr u32 stride_sse = sizeof(__m128) / sizeof(fp32);
+
+alignas(alignof(__m256i))
+static const u32 rem_mask_table[stride_avx][stride_avx] = {
 	{0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0},
 	{0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xFFFFFFFF},
 	{0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xFFFFFFFF, 0xFFFFFFFF},
@@ -31,33 +35,39 @@ static const alignas(alignof(__m256i)) u32 rem_mask_table[8][8] = {
 	{0x0, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF},
 };
 
+inline fp32 horizontal_add(const __m128& accum) {
+	__m128 shuf = _mm_shuffle_ps(accum, accum, _MM_SHUFFLE(2, 3, 0, 1));
+	__m128 sums = _mm_add_ps(accum, shuf);
+	shuf = _mm_movehl_ps(shuf, sums);
+	sums = _mm_add_ss(sums, shuf);
+	return _mm_cvtss_f32(sums);
+}
+
 template <typename T>
 void vec_mat_mul(fp32* res, const T* tensor, const fp32* vector, u32 height, u32 width) {	// height == row, width = col
 	constexpr bool is_half_float = (sizeof(T) == sizeof(fp16));
+	constexpr u32 bits_in_byte = 8;
+	memset(res, 0, sizeof(fp32) * width);
 #ifdef __AVX__
 	static_assert(sizeof(T) == sizeof(fp16) || sizeof(T) == sizeof(fp32), "Unsupported type");
 	assert(0 == ((u64)vector & (sizeof(__m256) - 1)));
 	assert(0 == ((u64)res & (sizeof(__m256) - 1)));
-	constexpr u32 step_sz_256_fp32 = sizeof(__m256) / sizeof(fp32);
-	const u32 rem = height & (step_sz_256_fp32 - 1); // [0:7] -- works for both fp16 and fp32 == (height & (step_128_sz_fp16 - 1))
+	const u32 rem = height & (stride_avx - 1);
 	const u32 height_trunc = height - rem;
-	const u32 rem_offset = height_trunc - (step_sz_256_fp32 - rem);
+	const u32 rem_offset = height_trunc - (stride_avx - rem);
 	if (is_half_float) { // compile time branch
-		constexpr u32 step_128_sz_fp16 = sizeof(__m128i) / sizeof(fp16);
 		const __m256i rem_mask = _mm256_load_si256((__m256i*)rem_mask_table[rem]);
 		__m256 rem_vec = _mm256_maskload_ps(&vector[rem_offset], rem_mask);
 		fp16* t_row = (fp16*)tensor;
-		for (u32 w = 0; w < width; w++) {
+		for (u32 w = 0; w < width; w++, t_row += height) {
 			fp32* out	= &res[w];
 			__m256 accum_256 = _mm256_setzero_ps();
-			const fp32 *vs = vector;
-			for (u32 h = 0; h < height_trunc; h += step_128_sz_fp16) {
-				const __m256 &v = *(__m256*)vs;
+			for (u32 h = 0; h < height_trunc; h += stride_avx) {
+				const __m256 &v = *(__m256*)(vector+h);	// step_128_sz_fp16 == step_256_sz_fp32
 				__m128i t_ph = _mm_loadu_si128((__m128i*)(&t_row[h]));
 				__m256 t_ps = _mm256_cvtph_ps(t_ph);
 				t_ps = _mm256_mul_ps(t_ps, v);
 				accum_256 = _mm256_add_ps(accum_256, t_ps);
-				vs += step_sz_256_fp32;
 			}
 			// compute reminder chunk
 			__m128i t_ph = _mm_loadu_si128((__m128i*)(&t_row[rem_offset]));
@@ -68,27 +78,20 @@ void vec_mat_mul(fp32* res, const T* tensor, const fp32* vector, u32 height, u32
 			__m128 hi = _mm256_extractf128_ps(accum_256, 1);
 			__m128 lo = _mm256_extractf128_ps(accum_256, 0);
 			__m128 accum = _mm_add_ps(hi, lo);
-			__m128 shuf = _mm_shuffle_ps(accum, accum, _MM_SHUFFLE(2, 3, 0, 1));
-			__m128 sums = _mm_add_ps(accum, shuf);
-			shuf = _mm_movehl_ps(shuf, sums);
-			sums = _mm_add_ss(sums, shuf);
-			*out = _mm_cvtss_f32(sums);
-			t_row += height;
+			*out = horizontal_add(accum);
 		}
 	} else {
 		__m256i rem_mask = _mm256_load_si256((__m256i*)rem_mask_table[rem]);
 		__m256 rem_vec = _mm256_maskload_ps(&vector[rem_offset], rem_mask);
 		fp32* t_row = (fp32*)tensor;
-		for (u32 w = 0; w < width; w++) {
-				fp32* out = &res[w];
+		for (u32 w = 0; w < width; w++, t_row += height) {
+			fp32* out = &res[w];
 			__m256 accum256 = _mm256_setzero_ps();
-			const fp32* vs = vector;
-			for (u32 h = 0; h < height_trunc; h += step_sz_256_fp32) {
-				const __m256& v = *(__m256*)vs;
+			for (u32 h = 0; h < height_trunc; h += stride_avx) {
+				const __m256& v = *(__m256*)(vector+h);
 				__m256 t_ps = _mm256_loadu_ps(&t_row[h]);
 				t_ps = _mm256_mul_ps(t_ps, v);
 				accum256 = _mm256_add_ps(accum256, t_ps);
-				vs += step_sz_256_fp32;
 			}
 			// compute reminder chunk
 			__m256 t_ps = _mm256_loadu_ps(&t_row[rem_offset]);
@@ -98,48 +101,35 @@ void vec_mat_mul(fp32* res, const T* tensor, const fp32* vector, u32 height, u32
 			__m128 hi = _mm256_extractf128_ps(accum256, 1);
 			__m128 lo = _mm256_extractf128_ps(accum256, 0);
 			__m128 accum = _mm_add_ps(hi, lo);
-			__m128 shuf = _mm_shuffle_ps(accum, accum, _MM_SHUFFLE(2, 3, 0, 1));
-			__m128 sums = _mm_add_ps(accum, shuf);
-			shuf = _mm_movehl_ps(shuf, sums);
-			sums = _mm_add_ss(sums, shuf);
-			*out = _mm_cvtss_f32(sums);
-			t_row += height;
+			*out = horizontal_add(accum);
 		}
 	}
 #else // __SSE2__ version
 	static_assert(sizeof(T) == sizeof(fp32), "fp16 not supported without AVX/f16c");
 	assert(0 == ((u64)vector & (sizeof(__m128) - 1)));
 	assert(0 == ((u64)res & (sizeof(__m128) - 1)));
-	constexpr u32 step_sz_128_fp32 = sizeof(__m128) / sizeof(fp32);
-	const u32 rem = height & (step_sz_128_fp32 - 1); // [0:3]
-	const __m128i rem_mask = _mm_load_si128((__m128i*)&rem_mask_table[rem][step_sz_128_fp32]);
+	const u32 rem = height & (stride_sse - 1);
+	const __m128i rem_mask = _mm_load_si128((__m128i*)&rem_mask_table[rem][stride_sse]);
 	const u32 height_trunc = height - rem;
-	const u32 rem_offset = height_trunc - (step_sz_128_fp32 - rem);
+	const u32 rem_offset = height_trunc - (stride_sse - rem);
 	__m128 rem_vec = _mm_loadu_ps(&vector[rem_offset]);
 	rem_vec = _mm_and_ps(rem_vec, *(__m128*)&rem_mask);
 	fp32* t_row = (fp32*)tensor;
-	for (u32 w = 0; w < width; w++) {
+	for (u32 w = 0; w < width; w++, t_row += height) {
 		fp32* out = (fp32*)&res[w];
 		__m128 accum = _mm_setzero_ps();
-		const fp32* vs = vector;
-		for (u32 h = 0; h < height_trunc; h += step_sz_128_fp32) {
-			const __m128& v = *(__m128*)vs;
+		for (u32 h = 0; h < height_trunc; h += stride_sse) {
+			const __m128& v = *(__m128*)(vector+h);
 			__m128 t_ps = _mm_loadu_ps(&t_row[h]);
 			t_ps = _mm_mul_ps(t_ps, v);
 			accum = _mm_add_ps(accum, t_ps);
-			vs += step_sz_128_fp32;
 		}
 		// compute reminder chunk
 		__m128 t_ps = _mm_loadu_ps(&t_row[rem_offset]);
 		t_ps = _mm_mul_ps(t_ps, rem_vec);
 		accum = _mm_add_ps(accum, t_ps);
 		// horizontal add
-		__m128 shuf = _mm_shuffle_ps(accum, accum, _MM_SHUFFLE(2, 3, 0, 1));
-		__m128 sums = _mm_add_ps(accum, shuf);
-		shuf = _mm_movehl_ps(shuf, sums);
-		sums = _mm_add_ss(sums, shuf);
-		*out = _mm_cvtss_f32(sums);
-		t_row += height;
+		*out = horizontal_add(accum);
 	}
 #endif
 }
@@ -206,8 +196,8 @@ template <typename T>
 bool	fp_similar(T a, T b, T cmp = T(0.00001f)) { return abs(a - b) <= cmp; }
 
 int main() {
-	constexpr u32 h = 510;
-	constexpr u32 w = 288;
+	constexpr u32 h = 505;
+	constexpr u32 w = 247;
 
 #ifdef USE_HALF_FLOAT
 	typedef fp16 f_type;
