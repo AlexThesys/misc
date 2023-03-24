@@ -58,15 +58,14 @@ void vec_mat_mul(fp32* res, const T* tensor, const fp32* vector, u32 height, u32
 	if (is_half_float) { // compile time branch
 		const __m256i rem_mask = _mm256_load_si256((__m256i*)rem_mask_table[rem]);
 		__m256 rem_vec = _mm256_maskload_ps(&vector[rem_offset], rem_mask);
-		fp16* t_row = (fp16*)tensor;
+		const fp16* t_row = (fp16*)tensor;
 		for (u32 w = 0; w < width; w++, t_row += height) {
 			fp32* out	= &res[w];
 			__m256 accum_256 = _mm256_setzero_ps();
 			for (u32 h = 0; h < height_trunc; h += stride_avx) {
-				const __m256 &v = *(__m256*)(vector+h);	// step_128_sz_fp16 == step_256_sz_fp32
 				__m128i t_ph = _mm_loadu_si128((__m128i*)(&t_row[h]));
 				__m256 t_ps = _mm256_cvtph_ps(t_ph);
-				t_ps = _mm256_mul_ps(t_ps, v);
+				t_ps = _mm256_mul_ps(t_ps, *(__m256*)(vector + h));
 				accum_256 = _mm256_add_ps(accum_256, t_ps);
 			}
 			// compute reminder chunk
@@ -83,14 +82,13 @@ void vec_mat_mul(fp32* res, const T* tensor, const fp32* vector, u32 height, u32
 	} else {
 		__m256i rem_mask = _mm256_load_si256((__m256i*)rem_mask_table[rem]);
 		__m256 rem_vec = _mm256_maskload_ps(&vector[rem_offset], rem_mask);
-		fp32* t_row = (fp32*)tensor;
+		const fp32* t_row = (fp32*)tensor;
 		for (u32 w = 0; w < width; w++, t_row += height) {
 			fp32* out = &res[w];
 			__m256 accum256 = _mm256_setzero_ps();
 			for (u32 h = 0; h < height_trunc; h += stride_avx) {
-				const __m256& v = *(__m256*)(vector+h);
 				__m256 t_ps = _mm256_loadu_ps(&t_row[h]);
-				t_ps = _mm256_mul_ps(t_ps, v);
+				t_ps = _mm256_mul_ps(t_ps, *(__m256*)(vector + h));
 				accum256 = _mm256_add_ps(accum256, t_ps);
 			}
 			// compute reminder chunk
@@ -114,14 +112,13 @@ void vec_mat_mul(fp32* res, const T* tensor, const fp32* vector, u32 height, u32
 	const u32 rem_offset = height_trunc - (stride_sse - rem);
 	__m128 rem_vec = _mm_loadu_ps(&vector[rem_offset]);
 	rem_vec = _mm_and_ps(rem_vec, *(__m128*)&rem_mask);
-	fp32* t_row = (fp32*)tensor;
+	const fp32* t_row = (fp32*)tensor;
 	for (u32 w = 0; w < width; w++, t_row += height) {
 		fp32* out = (fp32*)&res[w];
 		__m128 accum = _mm_setzero_ps();
 		for (u32 h = 0; h < height_trunc; h += stride_sse) {
-			const __m128& v = *(__m128*)(vector+h);
 			__m128 t_ps = _mm_loadu_ps(&t_row[h]);
-			t_ps = _mm_mul_ps(t_ps, v);
+			t_ps = _mm_mul_ps(t_ps, *(__m128*)(vector + h));
 			accum = _mm_add_ps(accum, t_ps);
 		}
 		// compute reminder chunk
@@ -196,7 +193,7 @@ template <typename T>
 bool	fp_similar(T a, T b, T cmp = T(0.00001f)) { return abs(a - b) <= cmp; }
 
 int main() {
-	constexpr u32 h = 505;
+	constexpr u32 h = 501;
 	constexpr u32 w = 247;
 
 #ifdef USE_HALF_FLOAT
