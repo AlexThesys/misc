@@ -8,7 +8,7 @@
 
 #define __AVX__
 #ifdef __AVX__
-#define USE_HALF_FLOAT
+//#define USE_HALF_FLOAT
 #endif // __AVX__
 
 
@@ -75,8 +75,7 @@ void vec_mat_mul(fp32* res, const T* tensor, const fp32* vector, u32 height, u32
 			accum_256 = _mm256_add_ps(accum_256, t_ps);
 			// horizontal add
 			__m128 hi = _mm256_extractf128_ps(accum_256, 1);
-			__m128 lo = _mm256_extractf128_ps(accum_256, 0);
-			__m128 accum = _mm_add_ps(hi, lo);
+			__m128 accum = _mm_add_ps(hi, *(__m128*)&accum_256);
 			*out = horizontal_add(accum);
 		}
 	} else {
@@ -85,20 +84,19 @@ void vec_mat_mul(fp32* res, const T* tensor, const fp32* vector, u32 height, u32
 		const fp32* t_row = (fp32*)tensor;
 		for (u32 w = 0; w < width; w++, t_row += height) {
 			fp32* out = &res[w];
-			__m256 accum256 = _mm256_setzero_ps();
+			__m256 accum_256 = _mm256_setzero_ps();
 			for (u32 h = 0; h < height_trunc; h += stride_avx) {
 				__m256 t_ps = _mm256_loadu_ps(&t_row[h]);
 				t_ps = _mm256_mul_ps(t_ps, *(__m256*)(vector + h));
-				accum256 = _mm256_add_ps(accum256, t_ps);
+				accum_256 = _mm256_add_ps(accum_256, t_ps);
 			}
 			// compute reminder chunk
 			__m256 t_ps = _mm256_loadu_ps(&t_row[rem_offset]);
 			t_ps = _mm256_mul_ps(t_ps, rem_vec);
-			accum256 = _mm256_add_ps(accum256, t_ps);
+			accum_256 = _mm256_add_ps(accum_256, t_ps);
 			// horizontal add
-			__m128 hi = _mm256_extractf128_ps(accum256, 1);
-			__m128 lo = _mm256_extractf128_ps(accum256, 0);
-			__m128 accum = _mm_add_ps(hi, lo);
+			__m128 hi = _mm256_extractf128_ps(accum_256, 1);
+			__m128 accum = _mm_add_ps(hi, *(__m128*)&accum_256);
 			*out = horizontal_add(accum);
 		}
 	}
@@ -193,7 +191,7 @@ template <typename T>
 bool	fp_similar(T a, T b, T cmp = T(0.00001f)) { return abs(a - b) <= cmp; }
 
 int main() {
-	constexpr u32 h = 501;
+	constexpr u32 h = 507;
 	constexpr u32 w = 247;
 
 #ifdef USE_HALF_FLOAT
