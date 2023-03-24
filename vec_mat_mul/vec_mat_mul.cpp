@@ -20,18 +20,7 @@ typedef int32_t s32;
 typedef uint32_t u32;
 typedef uint64_t u64;
 
-static const alignas(alignof(__m128i)) u32 rem_mask_128_32[8][4] = {
-	{0x0, 0x0, 0x0, 0x0},
-	{0x0, 0x0, 0x0, 0x0000FFFF},
-	{0x0, 0x0, 0x0, 0xFFFFFFFF},
-	{0x0, 0x0, 0x0000FFFF, 0xFFFFFFFF},
-	{0x0, 0x0, 0xFFFFFFFF, 0xFFFFFFFF},
-	{0x0, 0x0000FFFF, 0xFFFFFFFF, 0xFFFFFFFF},
-	{0x0, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF},
-	{0x0000FFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF},
-};
-
-static const alignas(alignof(__m256i)) u32 rem_mask_256[8][8] = {
+static const alignas(alignof(__m256i)) u32 rem_mask_table[8][8] = {
 	{0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0},
 	{0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xFFFFFFFF},
 	{0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xFFFFFFFF, 0xFFFFFFFF},
@@ -55,7 +44,7 @@ void vec_mat_mul(fp32* res, const T* tensor, const fp32* vector, u32 height, u32
 	const u32 rem_offset = height_trunc - (step_sz_256_fp32 - rem);
 	if (is_half_float) { // compile time branch
 		constexpr u32 step_128_sz_fp16 = sizeof(__m128i) / sizeof(fp16);
-		const __m256i rem_mask = _mm256_load_si256((__m256i*)rem_mask_256[rem]);
+		const __m256i rem_mask = _mm256_load_si256((__m256i*)rem_mask_table[rem]);
 		__m256 rem_vec = _mm256_maskload_ps(&vector[rem_offset], rem_mask);
 		fp16* t_row = (fp16*)tensor;
 		for (u32 w = 0; w < width; w++) {
@@ -87,7 +76,7 @@ void vec_mat_mul(fp32* res, const T* tensor, const fp32* vector, u32 height, u32
 			t_row += height;
 		}
 	} else {
-		__m256i rem_mask = _mm256_load_si256((__m256i*)rem_mask_256[rem]);
+		__m256i rem_mask = _mm256_load_si256((__m256i*)rem_mask_table[rem]);
 		__m256 rem_vec = _mm256_maskload_ps(&vector[rem_offset], rem_mask);
 		fp32* t_row = (fp32*)tensor;
 		for (u32 w = 0; w < width; w++) {
@@ -122,8 +111,8 @@ void vec_mat_mul(fp32* res, const T* tensor, const fp32* vector, u32 height, u32
 	assert(0 == ((u64)vector & (sizeof(__m128) - 1)));
 	assert(0 == ((u64)res & (sizeof(__m128) - 1)));
 	constexpr u32 step_sz_128_fp32 = sizeof(__m128) / sizeof(fp32);
-	const u32 rem = height & (step_sz_128_fp32 - 1);
-	const __m128i rem_mask = _mm_load_si128((__m128i*)rem_mask_128_32[rem+rem]);
+	const u32 rem = height & (step_sz_128_fp32 - 1); // [0:3]
+	const __m128i rem_mask = _mm_load_si128((__m128i*)rem_mask_table[rem]);
 	const u32 height_trunc = height - rem;
 	const u32 rem_offset = height_trunc - (step_sz_128_fp32 - rem);
 	__m128 rem_vec = _mm_loadu_ps(&vector[rem_offset]);
