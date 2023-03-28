@@ -87,16 +87,18 @@ void vec_mat_mul(fp32* res, const T* tensor, const fp32* vector, u32 height, u32
 		const fp16* t_row = (fp16*)tensor;
 		for (u32 w = 0; w < width; w++, t_row += height) {
 			fp32* out = &res[w];
-			// compute reminder chunk
-			__m128i t_ph = _mm_loadu_si128((__m128i*)(&t_row[rem_offset]));
-			__m256 accum_256 = _mm256_cvtph_ps(t_ph);
-			accum_256 = _mm256_mul_ps(accum_256, rem_vec);
+			__m256 accum_256 = _mm256_setzero_ps();
 			for (u32 h = 0; h < height_trunc; h += stride_avx) {
 				__m128i t_ph = _mm_loadu_si128((__m128i*)(&t_row[h]));
 				__m256 t_ps = _mm256_cvtph_ps(t_ph);
 				t_ps = _mm256_mul_ps(t_ps, *(__m256*)(vector + h));
 				accum_256 = _mm256_add_ps(accum_256, t_ps);
 			}
+			// compute reminder chunk
+			__m128i t_ph = _mm_loadu_si128((__m128i*)(&t_row[rem_offset]));
+			__m256 t_ps = _mm256_cvtph_ps(t_ph);
+			t_ps = _mm256_mul_ps(t_ps, rem_vec);
+			accum_256 = _mm256_add_ps(accum_256, t_ps);
 			// horizontal add
 			__m128 hi = _mm256_extractf128_ps(accum_256, 1);
 			__m128 accum = _mm_add_ps(hi, *(__m128*)&accum_256);
@@ -109,14 +111,16 @@ void vec_mat_mul(fp32* res, const T* tensor, const fp32* vector, u32 height, u32
 		const fp32* t_row = (fp32*)tensor;
 		for (u32 w = 0; w < width; w++, t_row += height) {
 			fp32* out = &res[w];
-			// compute reminder chunk
-			__m256 accum_256 = _mm256_loadu_ps(&t_row[rem_offset]);
-			accum_256 = _mm256_mul_ps(accum_256, rem_vec);
+			__m256 accum_256 = _mm256_setzero_ps();
 			for (u32 h = 0; h < height_trunc; h += stride_avx) {
 				__m256 t_ps = _mm256_loadu_ps(&t_row[h]);
 				t_ps = _mm256_mul_ps(t_ps, *(__m256*)(vector + h));
 				accum_256 = _mm256_add_ps(accum_256, t_ps);
 			}
+			// compute reminder chunk
+			__m256 t_ps = _mm256_loadu_ps(&t_row[rem_offset]);
+			t_ps = _mm256_mul_ps(t_ps, rem_vec);
+			accum_256 = _mm256_add_ps(accum_256, t_ps);
 			// horizontal add
 			__m128 hi = _mm256_extractf128_ps(accum_256, 1);
 			__m128 accum = _mm_add_ps(hi, *(__m128*)&accum_256);
@@ -136,14 +140,16 @@ void vec_mat_mul(fp32* res, const T* tensor, const fp32* vector, u32 height, u32
 		const fp16* t_row = (fp16*)tensor;
 		for (u32 w = 0; w < width; w++, t_row += height) {
 			fp32* out = (fp32*)&res[w];
-			// compute reminder chunk
-			__m128 accum = cvtfp16_fp32(&t_row[rem_offset]);
-			accum = _mm_mul_ps(accum, rem_vec);
+			__m128 accum = _mm_setzero_ps();
 			for (u32 h = 0; h < height_trunc; h += stride_sse) {
 				__m128 t_ps = cvtfp16_fp32(&t_row[h]);
 				t_ps = _mm_mul_ps(t_ps, *(__m128*)(vector + h));
 				accum = _mm_add_ps(accum, t_ps);
 			}
+			// compute reminder chunk
+			__m128 t_ps = cvtfp16_fp32(&t_row[rem_offset]);
+			t_ps = _mm_mul_ps(t_ps, rem_vec);
+			accum = _mm_add_ps(accum, t_ps);
 			// horizontal add
 			*out = horizontal_add(accum);
 		}
@@ -159,14 +165,16 @@ void vec_mat_mul(fp32* res, const T* tensor, const fp32* vector, u32 height, u32
 		const fp32* t_row = (fp32*)tensor;
 		for (u32 w = 0; w < width; w++, t_row += height) {
 			fp32* out = (fp32*)&res[w];
-			// compute reminder chunk
-			__m128 accum = _mm_loadu_ps(&t_row[rem_offset]);
-			accum = _mm_mul_ps(accum, rem_vec);
+			__m128 accum = _mm_setzero_ps();
 			for (u32 h = 0; h < height_trunc; h += stride_sse) {
 				__m128 t_ps = _mm_loadu_ps(&t_row[h]);
 				t_ps = _mm_mul_ps(t_ps, *(__m128*)(vector + h));
 				accum = _mm_add_ps(accum, t_ps);
 			}
+			// compute reminder chunk
+			__m128 t_ps = _mm_loadu_ps(&t_row[rem_offset]);
+			t_ps = _mm_mul_ps(t_ps, rem_vec);
+			accum = _mm_add_ps(accum, t_ps);
 			// horizontal add
 			*out = horizontal_add(accum);
 		}
