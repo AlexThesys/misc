@@ -87,21 +87,19 @@ void vec_mat_mul(fp32* res, const T* tensor, const fp32* vector, u32 height, u32
 		const fp16* t_row = (fp16*)tensor;
 		for (u32 w = 0; w < width; w++, t_row += height) {
 			fp32* out = &res[w];
-			__m256 accum_256 = _mm256_setzero_ps();
+			// compute reminder chunk
+			__m128i t_ph = _mm_loadu_si128((__m128i*)(&t_row[rem_offset]));
+			__m256 accum_256 = _mm256_cvtph_ps(t_ph);
+			accum_256 = _mm256_mul_ps(accum_256, rem_vec);
 			for (u32 h = 0; h < height_trunc; h += stride_avx) {
 				__m128i t_ph = _mm_loadu_si128((__m128i*)(&t_row[h]));
 				__m256 t_ps = _mm256_cvtph_ps(t_ph);
 				t_ps = _mm256_mul_ps(t_ps, *(__m256*)(vector + h));
 				accum_256 = _mm256_add_ps(accum_256, t_ps);
 			}
-			// compute reminder chunk
-			__m128i t_ph = _mm_loadu_si128((__m128i*)(&t_row[rem_offset]));
-			__m256 t_ps = _mm256_cvtph_ps(t_ph);
-			t_ps = _mm256_mul_ps(t_ps, rem_vec);
-			accum_256 = _mm256_add_ps(accum_256, t_ps);
 			// horizontal add
 			__m128 hi = _mm256_extractf128_ps(accum_256, 1);
-			__m128 accum = _mm_add_ps(hi, *(__m128*) & accum_256);
+			__m128 accum = _mm_add_ps(hi, *(__m128*)&accum_256);
 			*out = horizontal_add(accum);
 		}
 	}
@@ -111,19 +109,17 @@ void vec_mat_mul(fp32* res, const T* tensor, const fp32* vector, u32 height, u32
 		const fp32* t_row = (fp32*)tensor;
 		for (u32 w = 0; w < width; w++, t_row += height) {
 			fp32* out = &res[w];
-			__m256 accum_256 = _mm256_setzero_ps();
+			// compute reminder chunk
+			__m256 accum_256 = _mm256_loadu_ps(&t_row[rem_offset]);
+			accum_256 = _mm256_mul_ps(accum_256, rem_vec);
 			for (u32 h = 0; h < height_trunc; h += stride_avx) {
 				__m256 t_ps = _mm256_loadu_ps(&t_row[h]);
 				t_ps = _mm256_mul_ps(t_ps, *(__m256*)(vector + h));
 				accum_256 = _mm256_add_ps(accum_256, t_ps);
 			}
-			// compute reminder chunk
-			__m256 t_ps = _mm256_loadu_ps(&t_row[rem_offset]);
-			t_ps = _mm256_mul_ps(t_ps, rem_vec);
-			accum_256 = _mm256_add_ps(accum_256, t_ps);
 			// horizontal add
 			__m128 hi = _mm256_extractf128_ps(accum_256, 1);
-			__m128 accum = _mm_add_ps(hi, *(__m128*) & accum_256);
+			__m128 accum = _mm_add_ps(hi, *(__m128*)&accum_256);
 			*out = horizontal_add(accum);
 		}
 	}
@@ -140,16 +136,14 @@ void vec_mat_mul(fp32* res, const T* tensor, const fp32* vector, u32 height, u32
 		const fp16* t_row = (fp16*)tensor;
 		for (u32 w = 0; w < width; w++, t_row += height) {
 			fp32* out = (fp32*)&res[w];
-			__m128 accum = _mm_setzero_ps();
+			// compute reminder chunk
+			__m128 accum = cvtfp16_fp32(&t_row[rem_offset]);
+			accum = _mm_mul_ps(accum, rem_vec);
 			for (u32 h = 0; h < height_trunc; h += stride_sse) {
 				__m128 t_ps = cvtfp16_fp32(&t_row[h]);
 				t_ps = _mm_mul_ps(t_ps, *(__m128*)(vector + h));
 				accum = _mm_add_ps(accum, t_ps);
 			}
-			// compute reminder chunk
-			__m128 t_ps = cvtfp16_fp32(&t_row[rem_offset]);
-			t_ps = _mm_mul_ps(t_ps, rem_vec);
-			accum = _mm_add_ps(accum, t_ps);
 			// horizontal add
 			*out = horizontal_add(accum);
 		}
@@ -165,16 +159,14 @@ void vec_mat_mul(fp32* res, const T* tensor, const fp32* vector, u32 height, u32
 		const fp32* t_row = (fp32*)tensor;
 		for (u32 w = 0; w < width; w++, t_row += height) {
 			fp32* out = (fp32*)&res[w];
-			__m128 accum = _mm_setzero_ps();
+			// compute reminder chunk
+			__m128 accum = _mm_loadu_ps(&t_row[rem_offset]);
+			accum = _mm_mul_ps(accum, rem_vec);
 			for (u32 h = 0; h < height_trunc; h += stride_sse) {
 				__m128 t_ps = _mm_loadu_ps(&t_row[h]);
 				t_ps = _mm_mul_ps(t_ps, *(__m128*)(vector + h));
 				accum = _mm_add_ps(accum, t_ps);
 			}
-			// compute reminder chunk
-			__m128 t_ps = _mm_loadu_ps(&t_row[rem_offset]);
-			t_ps = _mm_mul_ps(t_ps, rem_vec);
-			accum = _mm_add_ps(accum, t_ps);
 			// horizontal add
 			*out = horizontal_add(accum);
 		}
@@ -235,9 +227,9 @@ bool	fp_similar(T a, T b, T cmp = T(0.00001f)) { return abs(a - b) <= cmp; }
 
 int main() {
 
-	constexpr u32 height = 512;
-	constexpr u32 width = 284;
-	constexpr u32 max_size = 1;
+	constexpr u32 height = 1000;
+	constexpr u32 width = 700;
+	constexpr u32 max_size = 8;
 
 #ifdef USE_HALF_FLOAT
 	typedef fp16 f_type;
