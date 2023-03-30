@@ -41,13 +41,9 @@ inline fp32 horizontal_add(const __m128& accum) {
 }
 
 fp32 half_to_float(fp16 h) {
-
-    u32 e = (h&0x7C00); // exponent
-	const u32 e_zero = (e != 0);
-	e = (e + 0x1C000) << 13;
-    const u32 m = (h&0x03FF)<<13; // mantissa
-	const u32 f = ((h & 0x8000) << 16) | e_zero * (e | m);
-    return *(fp32*)&f;
+	const u32 e = (h & 0x7C00);
+	const u32 f = ((h & 0x8000) << 16) | ((e == 0) - 1) & (((e + 0x1C000) | (h & 0x03FF)) << 13);
+	return *(fp32*)&f;
 }
 
 inline __m128 cvtfp16_fp32(const void* ph) {
