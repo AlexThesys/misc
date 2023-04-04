@@ -217,7 +217,7 @@ void generate_data(T* tensor, fp32* vector, u32 height, u32 width) {
 			ps[3] = fp_distr(gen);
 			if (is_half_float) {
 				__m128i ph = _mm_cvtps_ph(*(__m128*)ps, 0);
-				_mm_storeu_epi64((void*)&t_row[h], ph);
+				_mm_storeu_si64((void*)&t_row[h], ph);
 			}
 			else {
 				_mm_storeu_ps((fp32*)&t_row[h], *(__m128*)ps);
