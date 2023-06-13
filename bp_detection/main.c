@@ -216,11 +216,11 @@ static void remove_breakpoints(const code_info* cinfo, int block_id) {
 #ifndef NDEBUG
     for (int i = 0; i < CODE_BLOCK_SIZE; i++) {
         if (mem_code_ptr[i] != buffer[i])
-            printf("Code bytes mismatch at: %p :\t %d %d\n", (mem_code_page+i), (int)mem_code_ptr[i], (int)buffer[i]);
+            printf("Code bytes mismatch at: %p :\t 0x%x 0x%x\n", (mem_code_page+i), (int)mem_code_ptr[i], (int)buffer[i]);
     }
 #endif // NDEBUG
     memcpy(mem_code_ptr, buffer, sizeof(buffer));
-    _mm_sfence();
+    //_mm_sfence();
 
     // make code page unwritable
     result = mprotect(mem_code_page, page_size, PROT_READ | PROT_EXEC);
