@@ -51,7 +51,7 @@ class producer_consumer {
         }
     public:
         static void	consume_data_mt(pvoid args);
-}						_motion_folder_validator;
+};
 
     void producer_consumer::consume_data_mt(pvoid_args) {
         producer_consumer &consumer = *(producer_consumer*)args;
