@@ -159,7 +159,8 @@ void dequantize_variable_range_b(fp32* f, u64 u, u32 num_vals) {
 	f[num_vals] = 1.0f - accum;
 	printf("%.6f ", f[num_vals]);
 }
-
+// WIP
+/*
 u32 calc_num_values(const fp32* f, u32 num_vals, u32 num_bits[3]) {
 	for (u32 i = 0; i < num_vals; i++) {
 		if (fp_zero(f[i], EPS_5)) {
@@ -224,12 +225,12 @@ void dequantize_variable_range_c(fp32* f, u64 u, u32 num_vals) {
 	f[num_vals] = 1.0f - accum;
 	printf("%.6f ", f[num_vals]);
 }
-
+*/
 int main() {
 	alignas(alignof(__m128))
 	fp32 values[NUM_VALS];
 	fp32 values_b[NUM_VALS];
-	fp32 values_c[NUM_VALS];
+	//fp32 values_c[NUM_VALS];
 	fp32 total_accum_orig = 0.0f;
 	fp32 total_accum_fixed = 0.0f;
 	fp32 total_accum_var = 0.0f;
@@ -284,13 +285,13 @@ int main() {
 		qval = 0;
 		qval = quantize_variable_range_b(values_b, NUM_VALS);
 		dequantize_variable_range_b(values_b, qval, NUM_VALS);
-
+/*
 		puts("\n==== Variable Range Quantization C ====");
 		// variable range quantization C
 		qval = 0;
 		qval = quantize_variable_range_c(values_c, NUM_VALS);
 		dequantize_variable_range_c(values_c, qval, NUM_VALS);
-
+*/
 		printf("\n\nAccumulated error fixed range:\t\t %.7f\n", abs(accum_orig - accum_fixed));
 		printf("Accumulated error variable range:\t %.7f\n\n", abs(accum_orig - accum_var));
 
