@@ -207,7 +207,7 @@ u64 quantize_variable_range_c(const fp32* f, u32 num_vals) {
 void dequantize_variable_range_c(fp32* f, u64 u, u32 num_vals) {
 	assert(num_vals <= 8 && num_vals > 1);
 	u32 num_bits[3];
-	num_vals = calc_num_values(f, num_vals, num_bits);
+	num_vals = calc_num_values(f, num_vals, num_bits);	// we don't have this info - f can hold anything at this opint
 
 	fp32 accum = 0.0f;
 	fp32 range = 1.0f;
