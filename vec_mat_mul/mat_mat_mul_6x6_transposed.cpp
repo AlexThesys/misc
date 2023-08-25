@@ -49,7 +49,23 @@ void batch_mat_mul_transposed_6x6_simd(const fp32* A, const fp32* B, fp32* Y, u3
 	constexpr u32 size_sq = size * size;
 	const __m128i rem_mask_m128 = _mm_set_epi32(0x0, 0x0, 0xFFFFFFFF, 0xFFFFFFFF);
 #if defined(__AVX__) || defined(__AVX2__)
-	const __m256i rem_mask_m256 = _mm256_set_epi32 (0x0, 0x0, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF);
+#	if defined(_M_FP_FAST) && !defined(_M_FP_EXCEPT)
+	// we are reading past the end of the array and doing arithmetic in the last iteration, but with fp exceptions turned of it's fine 
+	for (u32 i = 0; i < batches_num; ++i, A += size_sq, Y += size_sq) {
+		for (s32 j = 0; j < size; ++j, B += size) {
+			const __m256 b = _mm256_loadu_ps(B);
+			for (s32 k = 0; k < size_sq; k += size) {
+				__m256 a = _mm256_loadu_ps(A + k);
+				a = _mm256_mul_ps(a, b);
+				__m128 accum = _mm256_extractf128_ps(a, 1);
+				accum = _mm_and_ps(accum, *(__m128*)&rem_mask_m128);
+				accum = _mm_add_ps(accum, *(__m128*)&a);
+				Y[k + j] = horizontal_add(accum);
+			}
+		}
+	}
+#	else
+	const __m128i rem_mask_m128_inv = _mm_set_epi32(0xFFFFFFFF, 0xFFFFFFFF, 0x0, 0x0);
 	for (u32 i = 0; i < batches_num - 1; ++i, A += size_sq, Y+=size_sq) {
 		for (s32 j = 0; j < size; ++j, B += size) {
 			const __m256 b = _mm256_loadu_ps(B);
@@ -76,17 +92,37 @@ void batch_mat_mul_transposed_6x6_simd(const fp32* A, const fp32* B, fp32* Y, u3
 		}
 	}
 	// last vector in the last matrix
-	// reading past the end of the array, so have to zero out the junk in the operands
-	const __m256 b = _mm256_maskload_ps(B, rem_mask_m256);
+	const __m256 b = _mm256_loadu_ps(B - 2);
+	A -= 2;
 	for (s32 k = 0; k < size_sq; k += size) {
-		__m256 a = _mm256_maskload_ps(A + k, rem_mask_m256);
+		__m256 a = _mm256_loadu_ps(A + k);
 		a = _mm256_mul_ps(a, b);
 		__m128 accum = _mm256_extractf128_ps(a, 1);
+		*(__m128*)&a = _mm_and_ps(*(__m128*)&a, *(__m128*)&rem_mask_m128_inv);
 		accum = _mm_add_ps(accum, *(__m128*)&a);
 		Y[k + size - 1] = horizontal_add(accum);
 	}
-
+#	endif //  defined(_M_FP_FAST) && !defined(_M_FP_EXCEPT)
 #else
+#	if defined(_M_FP_FAST) && !defined(_M_FP_EXCEPT)
+	// we are reading past the end of the array and doing arithmetic in the last iteration, but with fp exceptions turned of it's fine 
+	for (u32 i = 0; i < batches_num; ++i, A += size_sq, Y += size_sq) {
+		for (s32 j = 0; j < size; ++j, B += size) {
+			const __m128 b0 = _mm_loadu_ps(B);
+			const __m128 b1 = _mm_loadu_ps(B + stride_sse);
+			for (s32 k = 0; k < size_sq; k += size) {
+				__m128 a0 = _mm_loadu_ps(A + k);
+				__m128 a1 = _mm_loadu_ps(A + stride_sse + k);
+				a0 = _mm_mul_ps(a0, b0);
+				a1 = _mm_mul_ps(a1, b1);
+				a1 = _mm_and_ps(a1, *(__m128*) & rem_mask_m128);
+				a0 = _mm_add_ps(a0, a1);
+				Y[k + j] = horizontal_add(a0);
+			}
+}
+	}
+#	else
+	const __m128i rem_mask_m128_inv = _mm_set_epi32(0xFFFFFFFF, 0xFFFFFFFF, 0x0, 0x0);
 	for (u32 i = 0; i < batches_num - 1; ++i, A += size_sq, Y += size_sq) {
 		for (s32 j = 0; j < size; ++j, B += size) {
 			const __m128 b0 = _mm_loadu_ps(B);
@@ -96,41 +132,41 @@ void batch_mat_mul_transposed_6x6_simd(const fp32* A, const fp32* B, fp32* Y, u3
 				__m128 a1 = _mm_loadu_ps(A + stride_sse + k);
 				a0 = _mm_mul_ps(a0, b0);
 				a1 = _mm_mul_ps(a1, b1);
-				a1 = _mm_and_ps(a1, *(__m128*)&rem_mask_m128);
+				a1 = _mm_and_ps(a1, *(__m128*) & rem_mask_m128);
 				a0 = _mm_add_ps(a0, a1);
-				Y[k+j] = horizontal_add(a0);
+				Y[k + j] = horizontal_add(a0);
 			}
 		}
-}
+	}
 	// compute the last matrix in the batch
 	for (s32 j = 0; j < size - 1; ++j, B += size) {
 		const __m128 b0 = _mm_loadu_ps(B);
 		__m128 b1 = _mm_loadu_ps(B + stride_sse);
 		for (s32 k = 0; k < size_sq; k += size) {
-			__m128 a0 = _mm_loadu_ps(A+k);
+			__m128 a0 = _mm_loadu_ps(A + k);
 			__m128 a1 = _mm_loadu_ps(A + stride_sse + k);
 			a0 = _mm_mul_ps(a0, b0);
 			a1 = _mm_mul_ps(a1, b1);
 			a1 = _mm_and_ps(a1, *(__m128*) & rem_mask_m128);
 			a0 = _mm_add_ps(a0, a1);
-			Y[k+j] = horizontal_add(a0);
+			Y[k + j] = horizontal_add(a0);
 		}
 	}
 	// last vector in the last matrix
-	// reading past the end of the array, so have to zero out the junk in the operands
+	A -= 2;
+	B -= 2;
 	const __m128 b0 = _mm_loadu_ps(B);
 	__m128 b1 = _mm_loadu_ps(B + stride_sse);
 	for (s32 k = 0; k < size_sq; k += size) {
 		__m128 a0 = _mm_loadu_ps(A + k);
 		__m128 a1 = _mm_loadu_ps(A + stride_sse + k);
 		a0 = _mm_mul_ps(a0, b0);
-		// we are reading past the end of the array, so have to zero out the junk from the operands
-		a1 = _mm_and_ps(a1, *(__m128*) & rem_mask_m128);
-		b1 = _mm_and_ps(b1, *(__m128*) & rem_mask_m128);
+		a0 = _mm_and_ps(a0, *(__m128*) & rem_mask_m128_inv);
 		a1 = _mm_mul_ps(a1, b1);
 		a0 = _mm_add_ps(a0, a1);
 		Y[k + size - 1] = horizontal_add(a0);
 	}
+#	endif	//  defined(_M_FP_FAST) && !defined(_M_FP_EXCEPT)
 #endif
 }
 
@@ -193,7 +229,6 @@ BENCHMARK(mat_mat_mul_simd);
 
 BENCHMARK_MAIN();
 
-//  test
 
 //template <typename T>
 //bool	fp_similar(T a, T b, T cmp = T(0.00001f)) { return abs(a - b) <= cmp; }
