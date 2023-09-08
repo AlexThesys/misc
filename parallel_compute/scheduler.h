@@ -43,23 +43,14 @@ void deinit_workers() {
 }
 
 void* worker_func(void* params) { // (worker_params* params)
-    u8 params_copy[MAX_PARAMS_SIZE_BYTES];
     worker_params *p = (worker_params*)params;
     while (TRUE) {
         counting_semaphore_wait(&g_workers_sem);
         if (g_stop_workers)
             break;
 
-        if (!p->st_params.block_size)
-            continue;   // go back to sleep
-
-        // make a copy of the func params
-        assert(p->params_size_bytes <= MAX_PARAMS_SIZE_BYTES);
-        memcpy((void*)params_copy, &p->params, p->params_size_bytes);
-        // get this worker's chunk of work
-        p->divide_work((void*)params_copy, p->st_params);
         // do work
-        p->func((void*)params_copy);
+        p->func_wrapper((void*)p->params, p->st_params);
         // signal scheduler
         barrier_signal(&g_scheduler_barrier);
     }
@@ -86,15 +77,11 @@ void* scheduler_func(void* params) {
 		int offset_accum = 0;
 		for (int i = 0; i < max_threads; i++) {
             worker_params[i].params = new_task.params;
-            worker_params[i].task_func = &new_task.func;
-            worker_params[i].divide_work = &new_task.divide_work;
+            worker_params[i].func_wrapper = &new_task.func_wrapper;
 			worker_params[i].st_params.block_size = block_size + ((tail-- > 0) ? 1 : 0);
 			worker_params[i].st_params.offset = offset_accum;
 			offset_accum += worker_params[i].st_params.block_size;
-            worker_params[i].params_size_bytes = new_task.params_size_bytes;
 		}
-		for (int i = max_threads; i < THREADCOUNT; i++)
-			worker_params[i].st_params.block_size = 0;
         // signal workers to start computing
         counting_semaphore_signal(&g_workers_sem, max_threads);
         

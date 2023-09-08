@@ -8,24 +8,19 @@ typedef struct split_task_params {
     u32 block_size;
 } split_task_params ;
 
-typedef void(task_func)(void *params); // function that does the actual computation
-typedef void(divide_work_func)(void *params, split_task_params st_params); // divide work for mulatiple workers
+typedef void(task_func)(void *params, split_task_params st_params); // function that does the actual computation
 
 typedef struct task {
     void* params;
-    task_func *func;
-    divide_work_func *divide_work;
+    task_func *func_wrapper;
     binary_semapore *sem;
     s32 work_size;
-    s32 params_size_bytes;
 } task;
 
 typdef struct worker_params { // that's what being passed to the worker thread function
     void* params;
-    task_func *func;
-    divide_work_func *divide_work;
+    task_func *func_wrapper;
     split_task_params st_params;
-    s32 params_size_bytes;
 } worker_params;
 
 #endif // _TASK_H_
