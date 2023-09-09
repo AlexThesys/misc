@@ -25,6 +25,18 @@ void barrier_deinit(barrier* sem) {
     sem->max_count = 0;
 }
 
+void barrier_wait(barrier* sem) {
+    pthread_mutex_lock(&sem->wait_mtx);
+    if (++sem->counter == sem->max_count) {
+        pthread_cond_broadcast(&sem->cond);
+    } else {
+        while (sem->counter != sem->max_count) { // counter <= max_count ?
+            pthread_cond_wait(&sem->cond, &sem->wait_mtx);
+        }
+    }
+    pthread_mutex_unlock(&sem->wait_mtx);
+}
+
 void barrier_try_wait(barrier* sem, s32 count) {
     pthread_mutex_lock(&sem->wait_mtx);
     sem->max_count = count;
@@ -43,10 +55,10 @@ void barrier_signal(barrier* sem) {
 
 }
 
-void barrier_reset(barrier* sem) {
+void barrier_reset(barrier* sem, s32 max_count) {
     pthread_mutex_lock(&sem->wait_mtx);
-    sem->counter = sem->max_count;
-    pthread_cond_broadcast(&sem->cond);
+    sem->counter = 0;
+    sem->max_count = max_count;
     pthread_mutex_unlock(&sem->wait_mtx);
 }
 #endif // _BARRIER_H_

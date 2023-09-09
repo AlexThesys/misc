@@ -88,7 +88,8 @@ void counting_semaphore_try_wait(counting_semaphore* sem) {
 
 void counting_semaphore_signal(counting_semaphore* sem, s32 count) {
     pthread_mutex_lock(&sem->wait_mtx);
-    sem->counter = (sem->counter + count) % sem->max_count;
+    const s32 new_count = sem->counter + count;
+    sem->counter = _min(sem->max_count, new_count);
     //pthread_cond_signal(&sem->cond);
     pthread_cond_broadcast(&sem->cond);
     pthread_mutex_unlock(&sem->wait_mtx);
@@ -99,6 +100,13 @@ void counting_semaphore_signal_all(counting_semaphore* sem) {
     pthread_mutex_lock(&sem->wait_mtx);
     sem->counter = sem->max_count;
     pthread_cond_broadcast(&sem->cond);
+    pthread_mutex_unlock(&sem->wait_mtx);
+}
+
+void counting_semaphore_reset(counting_semaphore* sem, s32 max_count) {
+    pthread_mutex_lock(&sem->wait_mtx);
+    sem->max_count = max_count;
+    sem->counter = 0;
     pthread_mutex_unlock(&sem->wait_mtx);
 }
 #endif // _SEMAPHORE_H_

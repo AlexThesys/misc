@@ -30,7 +30,6 @@ BOOL is_empty_task_queue(task_queue* tasks_q) {
     BOOL empty = (tasks_q->write_idx == tasks_q->read_idx 
         && tasks_q->write_round == tasks_q->read_round);
     spinlock_unlock(&tasks_q->lock);
-    puts("Task queue is empty.");
     return empty;
 }
 

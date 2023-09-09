@@ -2,7 +2,7 @@
 
 #define EXAMPLE_PARAMS float* a, float* b, float *c, int size
 
-#define EXAMPLE_WORK_SIZE 0X1000
+#define EXAMPLE_WORK_SIZE 0X90
 
 typedef struct example_params {
     float *a;
@@ -47,7 +47,7 @@ int main() {
 
         // print results
         for (int i = 0; i < EXAMPLE_WORK_SIZE; i++)
-            printf("%.2f\t%.2f\t%.2f\n", a[i], b[i], c[i]);
+            printf("%d: %.2f\t%.2f\t%.2f\n", i, a[i], b[i], c[i]);
     }
 
     // cleanup

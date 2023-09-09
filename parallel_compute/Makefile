@@ -5,7 +5,7 @@ CFLAGS = -Wall -Wextra
 ifeq ($(TYPE),RELEASE)
 	CFLAGS+= -O3
 else
-	CFLAGS+= -O0
+	CFLAGS+= -O0 -g
 endif
 LDFLAGS = -lpthread
 
