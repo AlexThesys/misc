@@ -89,7 +89,7 @@ void* scheduler_func(void* params) {
         barrier_try_wait(&g_scheduler_barrier);
         
         // signal client that the work is done        
-        new_task->sem->binary_semaphore_signal();
+        binary_semaphore_signal(new_task.sem);
     }
     // stop workers
     g_stop_workers = 0;
