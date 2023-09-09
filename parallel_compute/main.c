@@ -19,7 +19,7 @@ void generate_example_data(EXAMPLE_PARAMS);
 
 int main() {
     task new_task;
-    binary_semapore sem;
+    binary_semaphore sem;
     example_params params;
     // test data
     float a[EXAMPLE_WORK_SIZE];
@@ -32,18 +32,18 @@ int main() {
     binary_semaphore_init(&sem);
 
     // test run
-    generate_example_data(a, b, c, size);
-    example_params.a = a;
-    example_params.b = b;
-    example_params.c = c;
-    new_task.params = (void*)&example_params;
-    new_task.task_wrapper = &example_wrapper_func;
+    generate_example_data(a, b, c, EXAMPLE_WORK_SIZE);
+    params.a = a;
+    params.b = b;
+    params.c = c;
+    new_task.params = (void*)&params;
+    new_task.func_wrapper = &example_wrapper_func;
     new_task.sem = &sem;
     new_task.work_size = EXAMPLE_WORK_SIZE; 
     if (try_push_next_task_queue(&g_task_queue, &new_task)) {
         binary_semaphore_signal(&g_scheduler_sem);
         binary_semaphore_try_wait(&sem);
-        sem.do_wait = true;     
+        sem.do_wait = TRUE;     
 
         // print results
         for (int i = 0; i < EXAMPLE_WORK_SIZE; i++)

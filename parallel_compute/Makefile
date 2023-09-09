@@ -1,4 +1,5 @@
 TARGET = exec
+TYPE=RELEASE
 CC = gcc
 CFLAGS = -Wall -Wextra 
 ifeq ($(TYPE),RELEASE)

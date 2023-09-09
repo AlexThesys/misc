@@ -22,13 +22,13 @@ void binary_semaphore_deinit(binary_semaphore* sem) {
     pthread_mutex_destroy(&sem->wait_mtx);
 }
 
-//void binary_semaphore_try_wait(binary_semaphore* sem) {
-//    pthread_mutex_lock(&sem->wait_mtx);
-//    while (sem->do_wait) {
-//        pthread_cond_wait(&sem->cond, &sem->wait_mtx);
-//    }
-//    pthread_mutex_unlock(&sem->wait_mtx);
-//}
+void binary_semaphore_try_wait(binary_semaphore* sem) {
+    pthread_mutex_lock(&sem->wait_mtx);
+    while (sem->do_wait) {
+        pthread_cond_wait(&sem->cond, &sem->wait_mtx);
+    }
+    pthread_mutex_unlock(&sem->wait_mtx);
+}
 
 void binary_semaphore_wait(binary_semaphore* sem) {
     pthread_mutex_lock(&sem->wait_mtx);
@@ -67,7 +67,7 @@ void counting_semaphore_init(counting_semaphore* sem, s32 max_cnt) {
     sem->counter = 0;
     pthread_cond_init(&sem->cond, NULL);
     pthread_mutex_init(&sem->wait_mtx, NULL);
-    max_count = max_cnt;
+    sem->max_count = max_cnt;
 }
 
 void counting_semaphore_deinit(counting_semaphore* sem) {
@@ -97,7 +97,7 @@ void counting_semaphore_signal(counting_semaphore* sem, s32 count) {
 
 void counting_semaphore_signal_all(counting_semaphore* sem) {
     pthread_mutex_lock(&sem->wait_mtx);
-    sem->counter = max_count;
+    sem->counter = sem->max_count;
     pthread_cond_broadcast(&sem->cond);
     pthread_mutex_unlock(&sem->wait_mtx);
 }
