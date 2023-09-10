@@ -10,10 +10,10 @@
 
 volatile s32 g_stop_scheduler; // = 0
 volatile s32 g_stop_workers; // = 0
-binary_semaphore g_scheduler_sem;
-barrier g_scheduler_barrier;
 pthread_t g_scheduler_thread;
 pthread_t g_workers[NUM_WORKERS];
+binary_semaphore g_scheduler_sem;
+barrier g_scheduler_barrier;
 binary_semaphore g_workers_sem[NUM_WORKERS];
 
 task_queue g_task_queue;

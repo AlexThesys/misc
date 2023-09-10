@@ -15,14 +15,14 @@ void barrier_init(barrier* sem) {
     pthread_cond_init(&sem->cond, NULL);
     pthread_mutex_init(&sem->wait_mtx, NULL);
     sem->counter = 0;
-    sem->max_count = 0;
+    sem->max_count = -1;
 }
 
 void barrier_deinit(barrier* sem) {
     pthread_cond_destroy(&sem->cond);
     pthread_mutex_destroy(&sem->wait_mtx);
     sem->counter = 0;
-    sem->max_count = 0;
+    sem->max_count = -1;
 }
 
 void barrier_wait(barrier* sem) {
@@ -30,7 +30,7 @@ void barrier_wait(barrier* sem) {
     if (++sem->counter == sem->max_count) {
         pthread_cond_broadcast(&sem->cond);
     } else {
-        while (sem->counter != sem->max_count) { // counter <= max_count ?
+        while (sem->counter != sem->max_count) {
             pthread_cond_wait(&sem->cond, &sem->wait_mtx);
         }
     }
@@ -40,7 +40,7 @@ void barrier_wait(barrier* sem) {
 void barrier_try_wait(barrier* sem, s32 count) {
     pthread_mutex_lock(&sem->wait_mtx);
     sem->max_count = count;
-    while (sem->counter != sem->max_count) { // counter <= max_count ?
+    while (sem->counter != sem->max_count) {
         pthread_cond_wait(&sem->cond, &sem->wait_mtx);
     }
     sem->counter = 0;
@@ -50,7 +50,7 @@ void barrier_try_wait(barrier* sem, s32 count) {
 void barrier_signal(barrier* sem) {
     pthread_mutex_lock(&sem->wait_mtx);
     sem->counter++; // % max_count ?
-    pthread_cond_signal(&sem->cond);
+    pthread_cond_broadcast(&sem->cond);
     pthread_mutex_unlock(&sem->wait_mtx);
 
 }
