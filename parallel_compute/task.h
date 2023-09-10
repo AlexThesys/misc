@@ -22,6 +22,7 @@ typedef struct task {
 typedef struct worker_params { // that's what being passed to the worker thread function
     void* params;
     task_func *func_wrapper;
+    binary_semaphore *sem;
     split_task_params st_params;
 } worker_params;
 

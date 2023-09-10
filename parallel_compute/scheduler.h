@@ -14,8 +14,7 @@ binary_semaphore g_scheduler_sem;
 barrier g_scheduler_barrier;
 pthread_t g_scheduler_thread;
 pthread_t g_workers[NUM_WORKERS];
-counting_semaphore g_workers_sem;
-barrier g_workers_barrier;
+binary_semaphore g_workers_sem[NUM_WORKERS];
 
 task_queue g_task_queue;
 
@@ -43,10 +42,10 @@ void deinit_scheduler() {
 
 void init_workers(worker_params *params) {
     int result_code = 0;
-    counting_semaphore_init(&g_workers_sem, NUM_WORKERS);
-    barrier_init(&g_workers_barrier);
     g_stop_workers = FALSE;
     for (int i = 0; i < NUM_WORKERS; i++) {
+        binary_semaphore_init(g_workers_sem+i);
+        params[i].sem = g_workers_sem + i;
         result_code |= pthread_create(&g_workers[i], NULL, worker_func, (void*)(params+i));
     }
     assert(!result_code);
@@ -55,26 +54,24 @@ void init_workers(worker_params *params) {
 void deinit_workers() {
     int result_code = 0;
     g_stop_workers = TRUE;
-    counting_semaphore_signal_all(&g_workers_sem);
     for (int i = 0; i < NUM_WORKERS; ++i) {
+    binary_semaphore_signal(g_workers_sem+i);
         result_code |= pthread_join(g_workers[i], NULL);
         assert(!result_code);
+        binary_semaphore_deinit(g_workers_sem+i);
     }
-    barrier_deinit(&g_workers_barrier);
-    counting_semaphore_deinit(&g_workers_sem);
 }
 
 void* worker_func(void* params) { // (worker_params* params)
     worker_params *p = (worker_params*)params;
+    binary_semaphore *sem = p->sem;
     while (TRUE) {
-        counting_semaphore_try_wait(&g_workers_sem);
+        binary_semaphore_try_wait(sem);
+        sem->do_wait = TRUE;
         if (g_stop_workers)
             break;
-
         // do work
         p->func_wrapper((void*)p->params, p->st_params);
-        // wait for the others
-        barrier_wait(&g_workers_barrier);
         // signal scheduler
         barrier_signal(&g_scheduler_barrier);
     }
@@ -107,14 +104,11 @@ void* scheduler_func(void*) {
 			params[i].st_params.block_size = block_size + ((tail-- > 0) ? 1 : 0);
 			params[i].st_params.offset = offset_accum;
 			offset_accum += params[i].st_params.block_size;
+            // signal workers to start computing
+            binary_semaphore_signal(g_workers_sem + i);
 		}
-        // signal workers to start computing
-        barrier_reset(&g_workers_barrier, max_threads);
-        counting_semaphore_signal(&g_workers_sem, max_threads);
-        
         // wait until all the workers have finished
         barrier_try_wait(&g_scheduler_barrier, max_threads);
-        
         // signal client that the work is done        
         binary_semaphore_signal(new_task.sem);
     }
