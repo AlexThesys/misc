@@ -8,6 +8,7 @@
 #include <stdatomic.h>
 #include <string.h>
 #include <sched.h>
+#include <unistd.h>
 
 #define TRUE 1
 #define FALSE 0

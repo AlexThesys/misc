@@ -1,4 +1,3 @@
-#include <xmmintrin.h>
 #include "workers.h"
 
 #define EXAMPLE_PARAMS float* a, float* b, float *c, int size
@@ -20,11 +19,9 @@ void generate_example_data(EXAMPLE_PARAMS);
 
 #define NUM_TESTS 2
 
-#include <unistd.h>
 int main() {
     task new_tasks[NUM_WORKERS];
     example_params params;
-    volatile u32 chunk_counter = 0;
     // test data
     float a[EXAMPLE_WORK_SIZE];
     float b[EXAMPLE_WORK_SIZE];
@@ -32,18 +29,20 @@ int main() {
 
     // initialization
     init_task_queue(&g_task_queue);
-    init_workers(&g_worker_params);
-    //sleep(1);
-
-    // test run
-    generate_example_data(a, b, c, EXAMPLE_WORK_SIZE);
-    params.a = a;
-    params.b = b;
-    params.c = c;
+    init_workers(g_worker_params);
 
     for (int j = 0; j < NUM_TESTS; j++) {
+        volatile u32 chunk_counter = 0;
+
         binary_semaphore sem;
         binary_semaphore_init(&sem);
+
+        // test run
+        generate_example_data(a, b, c, EXAMPLE_WORK_SIZE);
+        params.a = a;
+        params.b = b;
+        params.c = c;
+
 
         // assign work to workers
         assign_workload(new_tasks, EXAMPLE_WORK_SIZE, &chunk_counter, &params, &example_wrapper_func, &sem);

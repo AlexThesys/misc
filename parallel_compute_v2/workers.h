@@ -18,14 +18,14 @@ task_queue g_task_queue;
 void* worker_func(void* params);
 
 typedef struct worker_params {
-    binary_semaphore *workers_sem;
     task_queue *task_queue;
-    volatile s32 *stop;
+    binary_semaphore *workers_sem;
+    volatile const s32 *stop;
 } worker_params;
 
-worker_params g_worker_params;
+worker_params g_worker_params[NUM_WORKERS];
 
-void init_workers(worker_params *params) {
+void init_workers(worker_params params[NUM_WORKERS]) {
     int result_code = 0;
     g_stop_workers = FALSE;
     for (int i = 0; i < NUM_WORKERS; i++) {
@@ -55,10 +55,12 @@ void* worker_func(void* params) {
     worker_params *wp = (worker_params*)params;
     task_queue *tq = wp->task_queue;
     binary_semaphore *w_sem = wp->workers_sem;
-    volatile s32 *stop = wp->stop;
+    volatile const s32 *stop = wp->stop;
+    printf("%x\n", *stop);
     while (TRUE) {
         task t;
-        while (!*stop && !try_pop_task_queue(tq, &t)) {
+        printf("%x\n", *stop);
+        while (!(*stop) && !try_pop_task_queue(tq, &t)) {
             binary_semaphore_try_wait(w_sem);
             w_sem->do_wait = TRUE;
         }
@@ -72,7 +74,7 @@ void* worker_func(void* params) {
         // do work
         t.func_wrapper((void*)t.params, t.st_params);
         // signal requester
-        if ((t.num_chunks - 1) <= atomic_incr(t.chunk_counter)) {
+        if ((t.num_chunks - 1) == atomic_incr(t.chunk_counter)) { // <=
             binary_semaphore_signal(t.completion_sem);
         }
     }

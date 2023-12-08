@@ -23,11 +23,11 @@ void init_task_queue(task_queue* tasks_q) {
     tasks_q->size = 0;
 }
 
-BOOL is_empty_task_queue(task_queue* tasks_q) {
+inline BOOL is_empty_task_queue(task_queue* tasks_q) {
     return (tasks_q->size == 0);
 }
 
-BOOL is_full_task_queue(task_queue* tasks_q) {
+inline BOOL is_full_task_queue(task_queue* tasks_q) {
     return (tasks_q->size == MAX_QUEUE_LENGHT);
 }
 
