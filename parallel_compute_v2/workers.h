@@ -56,10 +56,8 @@ void* worker_func(void* params) {
     task_queue *tq = wp->task_queue;
     binary_semaphore *w_sem = wp->workers_sem;
     volatile const s32 *stop = wp->stop;
-    printf("%x\n", *stop);
     while (TRUE) {
         task t;
-        printf("%x\n", *stop);
         while (!(*stop) && !try_pop_task_queue(tq, &t)) {
             binary_semaphore_try_wait(w_sem);
             w_sem->do_wait = TRUE;
