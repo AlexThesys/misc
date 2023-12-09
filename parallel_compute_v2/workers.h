@@ -17,25 +17,31 @@ task_queue g_task_queue;
 
 void* worker_func(void* params);
 
-typedef struct worker_params {
+typedef struct init_worker_params {
     task_queue *task_queue;
     binary_semaphore *workers_sem;
     volatile const s32 *stop;
-} worker_params;
 
-worker_params g_worker_params[NUM_WORKERS];
+    counting_semaphore_v2 *init_sem;
+} init_worker_params;
 
-void init_workers(worker_params params[NUM_WORKERS]) {
+void init_workers() {
     int result_code = 0;
     g_stop_workers = FALSE;
+    init_worker_params params[NUM_WORKERS];
+    counting_semaphore_v2 init_sem;
+    counting_semaphore_init(&init_sem, NUM_WORKERS);
     for (int i = 0; i < NUM_WORKERS; i++) {
         binary_semaphore_init(g_workers_sem+i);
         params[i].task_queue = &g_task_queue;
         params[i].workers_sem = g_workers_sem + i;
         params[i].stop = &g_stop_workers;
+        params[i].init_sem = &init_sem;
         result_code |= pthread_create(&g_workers[i], NULL, worker_func, (void*)(params+i));
     }
     assert(!result_code);
+    counting_semaphore_try_wait(&init_sem);
+    counting_semaphore_deinit(&init_sem);
 }
 
 void deinit_workers() {
@@ -52,10 +58,11 @@ void deinit_workers() {
 }
 
 void* worker_func(void* params) {
-    worker_params *wp = (worker_params*)params;
+    init_worker_params *wp = (init_worker_params*)params;
     task_queue *tq = wp->task_queue;
     binary_semaphore *w_sem = wp->workers_sem;
     volatile const s32 *stop = wp->stop;
+    counting_semaphore_signal_one(wp->init_sem);
     while (TRUE) {
         task t;
         while (!(*stop) && !try_pop_task_queue(tq, &t)) {

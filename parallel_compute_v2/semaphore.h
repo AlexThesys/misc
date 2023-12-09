@@ -56,54 +56,43 @@ void binary_semaphore_signal_all(binary_semaphore* sem) {
 
 /////////////////////////////////////////////////////////////////
 
-typedef struct counting_semaphore {
+typedef struct counting_semaphore_v2 {
     pthread_cond_t cond;
     pthread_mutex_t wait_mtx;
     volatile s32 counter;
     s32 max_count;
-} counting_semaphore;
+} counting_semaphore_v2;
 
-void counting_semaphore_init(counting_semaphore* sem, s32 max_cnt) {
+void counting_semaphore_init(counting_semaphore_v2* sem, s32 max_cnt) {
     sem->counter = 0;
     pthread_cond_init(&sem->cond, NULL);
     pthread_mutex_init(&sem->wait_mtx, NULL);
     sem->max_count = max_cnt;
 }
 
-void counting_semaphore_deinit(counting_semaphore* sem) {
+void counting_semaphore_deinit(counting_semaphore_v2* sem) {
     sem->counter = 0;
     pthread_cond_destroy(&sem->cond);
     pthread_mutex_destroy(&sem->wait_mtx);
 }
 
-void counting_semaphore_try_wait(counting_semaphore* sem) {
+void counting_semaphore_try_wait(counting_semaphore_v2* sem) {
     pthread_mutex_lock(&sem->wait_mtx);
-    while (0 == sem->counter) {
+    while (sem->counter < sem->max_count) {
         pthread_cond_wait(&sem->cond, &sem->wait_mtx);
     }
-    sem->counter--;
-    assert(sem->counter >= 0);
     pthread_mutex_unlock(&sem->wait_mtx);
 }
 
-void counting_semaphore_signal(counting_semaphore* sem, s32 count) {
+void counting_semaphore_signal_one(counting_semaphore_v2* sem) {
     pthread_mutex_lock(&sem->wait_mtx);
-    const s32 new_count = sem->counter + count;
-    sem->counter = _min(sem->max_count, new_count);
+    sem->counter++;
     //pthread_cond_signal(&sem->cond);
     pthread_cond_broadcast(&sem->cond);
     pthread_mutex_unlock(&sem->wait_mtx);
-
 }
 
-void counting_semaphore_signal_all(counting_semaphore* sem) {
-    pthread_mutex_lock(&sem->wait_mtx);
-    sem->counter = sem->max_count;
-    pthread_cond_broadcast(&sem->cond);
-    pthread_mutex_unlock(&sem->wait_mtx);
-}
-
-void counting_semaphore_reset(counting_semaphore* sem, s32 max_count) {
+void counting_semaphore_reset(counting_semaphore_v2* sem, s32 max_count) {
     pthread_mutex_lock(&sem->wait_mtx);
     sem->max_count = max_count;
     sem->counter = 0;

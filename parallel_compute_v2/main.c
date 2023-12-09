@@ -29,7 +29,7 @@ int main() {
 
     // initialization
     init_task_queue(&g_task_queue);
-    init_workers(g_worker_params);
+    init_workers();
 
     for (int j = 0; j < NUM_TESTS; j++) {
         volatile u32 chunk_counter = 0;
