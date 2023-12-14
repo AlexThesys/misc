@@ -71,7 +71,7 @@ void* worker_func(void* params) {
         }
         if (*stop) {
             puts("Stopping workers");
-            if (try_pop_task_queue(tq, &t)) {
+            while (try_pop_task_queue(tq, &t)) {
                 binary_semaphore_signal(t.completion_sem);
             }
             break;
