@@ -1,0 +1,60 @@
+// compute shader
+#version 440 core
+
+layout (local_size_X=256) in;
+
+layout (r32i, binding=0) uniform iimageBuffer array;
+
+layout (std140, binding=0) uniform keys_block
+{
+    int keys[256]; // xyz - posintion, w -mass
+};
+
+int func(const int r, const int k) { return ((r*r) % (k+r)); }
+
+uniform int num_cycles;
+uniform int action;
+
+void cypher();
+void decypher();
+
+void main()
+{
+    switch (action) {
+        case 0 :
+            cypher();
+            break;
+        case 1 :
+            decypher();
+            break;
+    }
+}
+
+void cypher()
+{
+    int item[2];
+    item[0] = imageLoad(array, int(gl_GlobalInvocationID.x) << 1).x;
+    item[1] = imageLoad(array, (int(gl_GlobalInvocationID.x) << 1) + 1).x;
+    for (int i = 0; i < num_cycles; ++i){
+        int temp = item[0];
+        item[0] = item[1];
+         
+        item[1] = temp ^ func(item[1], keys[i]);
+    }
+    imageStore(array, int(gl_GlobalInvocationID.x) << 1, ivec4(item[0], 0, 0, 0));
+    imageStore(array, (int(gl_GlobalInvocationID.x) << 1) + 1, ivec4(item[1], 0, 0, 0));
+}
+void decypher()
+{
+    int item[2];
+    item[0] = imageLoad(array, (int(gl_GlobalInvocationID.x) << 1) + 1).x;
+    item[1] = imageLoad(array, int(gl_GlobalInvocationID.x) << 1).x;
+    for (int i = num_cycles - 1; i >= 0; --i){
+        int temp = item[0];
+        item[0] = item[1];
+         
+        item[1] = temp ^ func(item[1], keys[i]);
+    }
+    imageStore(array, int(gl_GlobalInvocationID.x) << 1, ivec4(item[1], 0, 0, 0));
+    imageStore(array, (int(gl_GlobalInvocationID.x) << 1) + 1, ivec4(item[0], 0, 0, 0));
+}
