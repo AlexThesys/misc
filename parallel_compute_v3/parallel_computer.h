@@ -28,12 +28,14 @@ public:
 	bool try_pop_task_queue(parallel_task &task);
 };
 
-inline bool	parallel_task_queue::try_push_task_queue(const parallel_task &task) {
+template <size_t size_log2>
+inline bool	parallel_task_queue<size_log2>::try_push_task_queue(const parallel_task &task) {
 	scoped_spin_lock _(_lock);
 	return _buffer.write_tail(task);
 }
 
-inline bool	parallel_task_queue::try_pop_task_queue(parallel_task &task) {
+template <size_t size_log2>
+inline bool	parallel_task_queue<size_log2>::try_pop_task_queue(parallel_task &task) {
 	scoped_spin_lock _(_lock);
 	return _buffer.read(task);
 }
