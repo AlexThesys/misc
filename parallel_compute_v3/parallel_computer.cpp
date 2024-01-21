@@ -14,6 +14,10 @@ parallel_computer::~parallel_computer() {
 	for (auto &sem : _workers_sem_feedback) {
 		sem->signal();
 	}
+	parallel_task task{};
+	while (_task_queue.try_pop_task_queue(task)) {
+		task.completion_sem->signal();
+    }
 }
 
 void parallel_computer::worker_func(void *args) {
@@ -31,9 +35,6 @@ void parallel_computer::worker_func(void *args) {
 			worker_sem.wait();
         }
         if (stop) {
-            while (task_queue.try_pop_task_queue(task)) {
-				task.completion_sem->signal();
-            }
             break;
         }
         // do work
