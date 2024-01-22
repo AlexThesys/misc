@@ -132,7 +132,6 @@ u64 quantize_variable_range_b(const fp32* f, u32 num_vals) {
 void dequantize_variable_range_b(fp32* f, u64 u, u32 num_vals) {
 	assert(num_vals <= 8);
 	num_vals--;
-	fp32 accum = 0.0f;
 	fp32 range = 1.0f;
 	packed_64b qvals = {0};
 	qvals.u = u;
@@ -148,15 +147,13 @@ void dequantize_variable_range_b(fp32* f, u64 u, u32 num_vals) {
 	f[0] = map_from_range<MAX_10_BIT>(f_old[0], range);
 	range -= f[0];
 	printf("%.6f ", f[0]);
-	accum += f[0];
 	for (u32 i = 1, sz = num_vals; i < sz; i++) {
 		f[i] = map_from_range<MAX_9_BIT>(f_old[i], range);
 		range -= f[i];
 		printf("%.6f ", f[i]);
-		accum += f[i];
 	}
 
-	f[num_vals] = 1.0f - accum;
+	f[num_vals] = range;
 	printf("%.6f ", f[num_vals]);
 }
 
