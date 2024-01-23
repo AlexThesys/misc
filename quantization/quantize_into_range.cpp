@@ -62,10 +62,10 @@ union packed_weights_64b {
 		// bits distribution - work in progress
 		u64 x0 : 8;
 		u64 x1 : 7;
-		u64 x2 : 6;
+		u64 x2 : 7;
 		u64 x3 : 6;
 		u64 x4 : 6;
-		u64 x5 : 6;
+		u64 x5 : 5;
 		u64 x6 : 5;
 		u64 x7 : 5;
 		u64 x8 : 5;
@@ -126,13 +126,13 @@ inline void pack_weights_64b(const fp32 input[12], u32 size, u64& result) {
 	range -= input[0];
 	res->x1 = (u8)roundf(map_into_range<mwv_7_bit>((size > 1) ? input[1] : 0.0f, range));
 	range -= input[1];
-	res->x2 = (u8)roundf(map_into_range<mwv_6_bit>((size > 2) ? input[2] : 0.0f, range));
+	res->x2 = (u8)roundf(map_into_range<mwv_7_bit>((size > 2) ? input[2] : 0.0f, range));
 	range -= input[2];
 	res->x3 = (u8)roundf(map_into_range<mwv_6_bit>((size > 3) ? input[3] : 0.0f, range));
 	range -= input[3];
 	res->x4 = (u8)roundf(map_into_range<mwv_6_bit>((size > 4) ? input[4] : 0.0f, range));
 	range -= input[4];
-	res->x5 = (u8)roundf(map_into_range<mwv_6_bit>((size > 5) ? input[5] : 0.0f, range));
+	res->x5 = (u8)roundf(map_into_range<mwv_5_bit>((size > 5) ? input[5] : 0.0f, range));
 	range -= input[5];
 	res->x6 = (u8)roundf(map_into_range<mwv_5_bit>((size > 6) ? input[6] : 0.0f, range));
 	range -= input[6];
@@ -157,7 +157,7 @@ inline void unpack_weights_64b(fp32 result[12], const u64 input) {
 	result[1] = map_from_range<mwv_7_bit>(result[1], range);
 	range -= result[1];
 	result[2] = (fp32)qvals.x2;
-	result[2] = map_from_range<mwv_6_bit>(result[2], range);
+	result[2] = map_from_range<mwv_7_bit>(result[2], range);
 	range -= result[2];
 	result[3] = (fp32)qvals.x3;
 	result[3] = map_from_range<mwv_6_bit>(result[3], range);
@@ -166,7 +166,7 @@ inline void unpack_weights_64b(fp32 result[12], const u64 input) {
 	result[4] = map_from_range<mwv_6_bit>(result[4], range);
 	range -= result[4];
 	result[5] = (fp32)qvals.x5;
-	result[5] = map_from_range<mwv_6_bit>(result[5], range);
+	result[5] = map_from_range<mwv_5_bit>(result[5], range);
 	range -= result[5];
 	result[6] = (fp32)qvals.x6;
 	result[6] = map_from_range<mwv_5_bit>(result[6], range);
