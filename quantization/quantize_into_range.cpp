@@ -19,30 +19,10 @@ typedef uint64_t u64;
 
 #define NUM_ITER 10 
 
-#define NUM_VALS 8 
+#define NUM_VALS 12 
 
 #define EPS_4 0.0001f
 #define EPS_5 0.00001f
-
-#define MAX_8_BIT 0X00FF
-#define MAX_9_BIT 0X01FF
-#define MAX_10_BIT 0X03FF
-
-
-
-union packed_64b {
-	struct {
-		u64 x0 : 10;
-		u64 x1 : 9;
-		u64 x2 : 9;
-		u64 x3 : 9;
-		u64 x4 : 9;
-		u64 x5 : 9;
-		u64 x6 : 9;
-	};
-
-	u64 u;
-};
 
 template <class T>	
 bool fp_zero(T	a, T cmp = T(EPS_5)) { return abs(a) <= cmp; }
@@ -52,7 +32,8 @@ fp32 map_into_range(fp32 value, fp32 input_max) {
 	constexpr fp32 out_max = (fp32)output_max;
 	if (fp_zero(input_max, EPS_5)) {
 		return			0.0f;
-	} else {
+	}
+	else {
 		fp32 out_val = value / input_max * out_max;
 		return			out_val;
 	}
@@ -61,100 +42,167 @@ fp32 map_into_range(fp32 value, fp32 input_max) {
 template <u32 input_max>
 fp32 map_from_range(fp32 value, fp32 output_max) {
 	constexpr fp32 input_max_rec = 1.0f / (fp32)input_max;
-		fp32 out_val = value * input_max_rec * output_max;
-		return			out_val;
-}
-
-fp32 map_into_range(fp32 value, fp32 input_max, fp32 output_max) {
-	if (fp_zero(input_max, EPS_5)) {
-		return			0.0f;
-	}
-	else {
-		fp32 out_val = value / input_max * output_max;
-		return			out_val;
-	}
-}
-
-fp32 map_from_range(fp32 value, fp32 input_max, fp32 output_max) {
-	const fp32 input_max_rec = 1.0f / (fp32)input_max;
 	fp32 out_val = value * input_max_rec * output_max;
 	return			out_val;
 }
 
-u64 quantize_variable_range_a(const fp32* f, u32 num_vals) {
+union packed_weights_32b {
+	struct {
+		u64 x0 : 12;
+		u64 x1 : 10;
+		u64 x2 : 10;
+	};
+
+	u32			u;
+};
+
+union packed_weights_64b {
+	struct {
+		// bits distribution - work in progress
+		u64 x0 : 7;
+		u64 x1 : 7;
+		u64 x2 : 6;
+		u64 x3 : 6;
+		u64 x4 : 6;
+		u64 x5 : 6;
+		u64 x6 : 6;
+		u64 x7 : 5;
+		u64 x8 : 5;
+		u64 x9 : 5;
+		u64 x10 : 5;
+	};
+
+	u64			u;
+};
+
+union packed_weights_96b {
+	struct {
+		// bits distribution - work in progress
+		u32 x0 : 10;
+		u32 x1 : 10;
+		u32 x2 : 10;
+		u32 x3 : 9;
+		u32 x4 : 9;
+		u32 x5 : 9;
+		u32 x6 : 8;
+		u32 x7 : 8;
+		u32 x8 : 8;
+		u32 x9 : 8;
+		u32 x10 : 7;
+	};
+
+	u32		u[3];
+};
+
+enum max_weight_value {
+	mwv_5_bit = 0x001F,
+	mwv_6_bit = 0x003F,
+	mwv_7_bit = 0x007F,
+	mwv_8_bit = 0x00FF,
+	mwv_9_bit = 0x01FF,
+	mwv_10_bit = 0x03FF,
+	mwv_11_bit = 0x07FF,
+	mwv_12_bit = 0x0FFF,
+};
+
+inline void pack_weights_32b(const fp32 input[4], u32 size, u32& result) {
+	size--;
 	fp32 range = 1.0f;
-	u64 res;
-	u8* u = (u8*)&res;
-	for (u32 i = 0; i < num_vals; i++) {
-		u[i] = (u8)roundf(map_into_range<MAX_8_BIT>(f[i], range));
-		range -= f[i];
-	}
-	return res;
+	packed_weights_32b* res = (packed_weights_32b*)&result;
+
+	res->x0 = (u16)roundf(map_into_range<mwv_12_bit>((size > 0) ? input[0] : 0.0f, range)); // maybe just an early exit at the top?
+	range -= input[0];
+	res->x1 = (u16)roundf(map_into_range<mwv_10_bit>((size > 1) ? input[1] : 0.0f, range));
+	range -= input[1];
+	res->x2 = (u16)roundf(map_into_range<mwv_10_bit>((size > 2) ? input[2] : 0.0f, range));
 }
 
-fp32 dequantize_variable_range_a(fp32* f, u64 u, u32 num_vals) {
-	fp32 accum = 0.0f;
+inline void unpack_weights_32b(fp32 result[4], const u32 input) {
+	packed_weights_32b qvals = { 0 };
+	qvals.u = input;
 	fp32 range = 1.0f;
-	const u8* qval = (const u8*)&u;
-	for (u32 i = 0; i < num_vals; i++) {
-		const fp32 f_old = (fp32)qval[i];
-		f[i] = map_from_range<MAX_8_BIT>(f_old, range);
-		range -= f[i];
-		printf("%.6f ", f[i]);
-		accum += f[i];
-	}
-	return accum;
+
+	result[0] = (fp32)qvals.x0;
+	result[0] = map_from_range<mwv_12_bit>(result[0], range);
+	range -= result[0];
+	result[1] = (fp32)qvals.x1;
+	result[1] = map_from_range<mwv_10_bit>(result[1], range);
+	range -= result[1];
+	result[2] = (fp32)qvals.x2;
+	result[2] = map_from_range<mwv_10_bit>(result[2], range);
+	range -= result[2];
+
+	result[3] = range;
 }
 
-u64 quantize_variable_range_b(const fp32* f, u32 num_vals) {
-	assert(num_vals <= 8);
-	num_vals--;
+inline void pack_weights_64b(const fp32 input[12], u32 size, u64& result) {
+	size--;
 	fp32 range = 1.0f;
-	packed_64b res;
+	packed_weights_64b* res = (packed_weights_64b*)&result;
 
-	res.x0 = (u16)roundf(map_into_range<MAX_10_BIT>(f[0], range));
-	range -= f[0];
-	res.x1 = (u16)roundf(map_into_range<MAX_9_BIT>(f[1], range));
-	range -= f[1];
-	res.x2 = (u16)roundf(map_into_range<MAX_9_BIT>(f[2], range));
-	range -= f[2];
-	res.x3 = (u16)roundf(map_into_range<MAX_9_BIT>(f[3], range));
-	range -= f[3];
-	res.x4 = (u16)roundf(map_into_range<MAX_9_BIT>(f[4], range));
-	range -= f[4];
-	res.x5 = (u16)roundf(map_into_range<MAX_9_BIT>(f[5], range));
-	range -= f[5];
-	res.x6 = (u16)roundf(map_into_range<MAX_9_BIT>(f[6], range));
-
-	return res.u;
+	res->x0 = (u8)roundf(map_into_range<mwv_7_bit>((size > 0) ? input[0] : 0.0f, range)); // maybe just an early exit at the top?
+	range -= input[0];
+	res->x1 = (u8)roundf(map_into_range<mwv_7_bit>((size > 1) ? input[1] : 0.0f, range));
+	range -= input[1];
+	res->x2 = (u8)roundf(map_into_range<mwv_6_bit>((size > 2) ? input[2] : 0.0f, range));
+	range -= input[2];
+	res->x3 = (u8)roundf(map_into_range<mwv_6_bit>((size > 3) ? input[3] : 0.0f, range));
+	range -= input[3];
+	res->x4 = (u8)roundf(map_into_range<mwv_6_bit>((size > 4) ? input[4] : 0.0f, range));
+	range -= input[4];
+	res->x5 = (u8)roundf(map_into_range<mwv_6_bit>((size > 5) ? input[5] : 0.0f, range));
+	range -= input[5];
+	res->x6 = (u8)roundf(map_into_range<mwv_6_bit>((size > 6) ? input[6] : 0.0f, range));
+	range -= input[6];
+	res->x7 = (u8)roundf(map_into_range<mwv_5_bit>((size > 7) ? input[7] : 0.0f, range));
+	range -= input[7];
+	res->x8 = (u8)roundf(map_into_range<mwv_5_bit>((size > 8) ? input[8] : 0.0f, range));
+	range -= input[8];
+	res->x9 = (u8)roundf(map_into_range<mwv_5_bit>((size > 9) ? input[9] : 0.0f, range));
+	range -= input[9];
+	res->x10 = (u8)roundf(map_into_range<mwv_5_bit>((size > 10) ? input[10] : 0.0f, range));
 }
 
-void dequantize_variable_range_b(fp32* f, u64 u, u32 num_vals) {
-	assert(num_vals <= 8);
-	num_vals--;
+inline void unpack_weights_64b(fp32 result[12], const u64 input) {
+	packed_weights_64b qvals = { 0 };
+	qvals.u = input;
 	fp32 range = 1.0f;
-	packed_64b qvals = {0};
-	qvals.u = u;
-	fp32 f_old[NUM_VALS-1];
-	f_old[0] = (fp32)qvals.x0;
-	f_old[1] = (fp32)qvals.x1;
-	f_old[2] = (fp32)qvals.x2;
-	f_old[3] = (fp32)qvals.x3;
-	f_old[4] = (fp32)qvals.x4;
-	f_old[5] = (fp32)qvals.x5;
-	f_old[6] = (fp32)qvals.x6;
 
-	f[0] = map_from_range<MAX_10_BIT>(f_old[0], range);
-	range -= f[0];
-	printf("%.6f ", f[0]);
-	for (u32 i = 1, sz = num_vals; i < sz; i++) {
-		f[i] = map_from_range<MAX_9_BIT>(f_old[i], range);
-		range -= f[i];
-		printf("%.6f ", f[i]);
-	}
+	result[0] = (fp32)qvals.x0;
+	result[0] = map_from_range<mwv_7_bit>(result[0], range);
+	range -= result[0];
+	result[1] = (fp32)qvals.x1;
+	result[1] = map_from_range<mwv_7_bit>(result[1], range);
+	range -= result[1];
+	result[2] = (fp32)qvals.x2;
+	result[2] = map_from_range<mwv_6_bit>(result[2], range);
+	range -= result[2];
+	result[3] = (fp32)qvals.x3;
+	result[3] = map_from_range<mwv_6_bit>(result[3], range);
+	range -= result[3];
+	result[4] = (fp32)qvals.x4;
+	result[4] = map_from_range<mwv_6_bit>(result[4], range);
+	range -= result[4];
+	result[5] = (fp32)qvals.x5;
+	result[5] = map_from_range<mwv_6_bit>(result[5], range);
+	range -= result[5];
+	result[6] = (fp32)qvals.x6;
+	result[6] = map_from_range<mwv_6_bit>(result[6], range);
+	range -= result[6];
+	result[7] = (fp32)qvals.x7;
+	result[7] = map_from_range<mwv_5_bit>(result[7], range);
+	range -= result[7];
+	result[8] = (fp32)qvals.x8;
+	result[8] = map_from_range<mwv_5_bit>(result[8], range);
+	range -= result[8];
+	result[9] = (fp32)qvals.x9;
+	result[9] = map_from_range<mwv_5_bit>(result[9], range);
+	range -= result[9];
+	result[10] = (fp32)qvals.x10;
+	result[10] = map_from_range<mwv_5_bit>(result[10], range);
+	range -= result[10];
 
-	f[num_vals] = range;
-	printf("%.6f ", f[num_vals]);
+	result[11] = range;
 }
 
 int main() {
@@ -197,25 +245,24 @@ int main() {
 		// original quantization
 		for (int i = 0; i < NUM_VALS; i++) {
 			fp32 f = values[i];
-			const u8 q = (u8)roundf(f * fp32(MAX_8_BIT));
-			f = (fp32)q / MAX_8_BIT;
+			const u8 q = (u8)roundf(f * fp32(mwv_8_bit));
+			f = (fp32)q / mwv_8_bit;
 			accum_fixed += f;
 			printf("%.6f ", f);
 		}
 
 		memcpy(values_b, values, sizeof(values_b));
-		memcpy(values_c, values, sizeof(values_c));
+		//memcpy(values_c, values, sizeof(values_c));
 
-		puts("\n==== Variable Range Quantization A ====");
+		puts("\n==== Variable Range Quantization ====");
 		// variable range quantization A
-		u64 qval = quantize_variable_range_a(values, NUM_VALS);
-		accum_var = dequantize_variable_range_a(values, qval, NUM_VALS);
-
-		puts("\n==== Variable Range Quantization B ====");
-		// variable range quantization B
-		qval = 0;
-		qval = quantize_variable_range_b(values_b, NUM_VALS);
-		dequantize_variable_range_b(values_b, qval, NUM_VALS);
+		u64 qval;
+		pack_weights_64b(values, NUM_VALS, qval);
+		unpack_weights_64b(values, qval);
+		for (u32 i = 0; i < NUM_VALS; i++) {
+			accum_var += values[i];
+			printf("%.6f ", values[i]);
+		}
 
 		printf("\n\nAccumulated error fixed range:\t\t %.7f\n", abs(accum_orig - accum_fixed));
 		printf("Accumulated error variable range:\t %.7f\n\n", abs(accum_orig - accum_var));
