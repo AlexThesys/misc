@@ -7,6 +7,9 @@ parallel_computer::parallel_computer() : _stop_workers(false), _thread_counter(0
 	for (int32_t t = 0; t < num_workers; t++) {
 		spawn_thread(worker_func, (void*)this);
 	}
+	//while (_thread_counter != num_workers) {
+	//	_master_sem.wait		();
+	//}
 }
 
 parallel_computer::~parallel_computer() {
@@ -17,7 +20,10 @@ parallel_computer::~parallel_computer() {
 	parallel_task task{};
 	while (_task_queue.try_pop_task_queue(task)) {
 		task.completion_sem->signal();
-    }
+    	}
+	//while (0 != _thread_counter) {
+	//	_master_sem.wait();
+	//}
 }
 
 void parallel_computer::worker_func(void *args) {
@@ -28,13 +34,15 @@ void parallel_computer::worker_func(void *args) {
 	const int32_t t_id = atomic_inc(&worker_params->_thread_counter) - 1;
 	worker_params->_workers_sem_feedback[t_id] = &worker_sem;
 	volatile int32_t &stop = worker_params->_stop_workers;
-
+	//worker_params->_master_sem.signal();
 	while (true) {
 		parallel_task task{};
         while (!(stop) && !task_queue.try_pop_task_queue(task)) {
 			worker_sem.wait();
         }
         if (stop) {
+		//threading::dec(&worker_params->_thread_counter);
+		//worker_params->_master_sem.signal();
             break;
         }
         // do work
