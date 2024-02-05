@@ -46,7 +46,7 @@ class parallel_computer {
 	svector<semaphore*, MAX_WORKERS> _workers_sem_feedback;
 	parallel_task_queue<5>	_task_queue; // 32 elements
 	volatile int32_t _thread_counter;
-	semaphore _master_sem{ 1 }; // binary semaphore
+	//semaphore _master_sem{ 1 }; // binary semaphore
 	volatile bool _stop_workers;
 public:
 	parallel_comuter();
