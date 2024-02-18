@@ -1,6 +1,6 @@
 TEST = test_exec
 BENCH = bench_exec
-CC = g++
+CC = clang++-17
 CFLAGS = -Wall -Wextra -O3 -mavx -mf16c
 
 all: $(TEST) $(BENCH)
