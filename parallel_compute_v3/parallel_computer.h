@@ -1,60 +1,59 @@
 #pragma once
 
 struct split_task_params {
-	uint32_t	offset;
-	uint32_t	block_size;
+	u32					offset;
+	u32					block_size;
 };
 
 typedef void(task_func)(void *args, split_task_params st_args); // function that does the actual computation
 
 struct parallel_task {
-	void *params;
-	task_func *func_wrapper;
-	semaphore *completion_sem; // binary semaphore
-	volatile int32_t *chunk_counter; // shared between worker threads
-	split_task_params st_params;
-	int32_t	num_chunks;
+	void				*params;
+	task_func			*func_wrapper;
+	threading::semaphore *completion_sem;
+	volatile s32		*chunk_counter; // shared between worker threads
+	split_task_params	st_params;
+	s32					num_chunks;
 
 public:
-	parallel_task() = default;
+						parallel_task		() = default;
 };
 
-template <size_t size_log2> // 32 elements
 class parallel_task_queue {
-	circular_buffer<parallel_task, size_log2> _buffer;
-	spin_lock _lock;
+	circular_buffer<parallel_task, 5> _buffer;
+	threading::spin_lock _lock;
 public:
-	bool try_push_task_queue(const parallel_task &task);
-	bool try_pop_task_queue(parallel_task &task);
+	inline	BOOL		try_push_task_queue	(const parallel_task &task);
+	inline	BOOL		try_pop_task_queue	(parallel_task &task);
 };
 
-template <size_t size_log2>
-inline bool	parallel_task_queue<size_log2>::try_push_task_queue(const parallel_task &task) {
-	scoped_spin_lock _(_lock);
-	return _buffer.write_tail(task);
+inline BOOL	parallel_task_queue::try_push_task_queue(const parallel_task &task) {
+	threading::scoped_spin_lock _(_lock);
+	return				_buffer.write_tail(task);
 }
 
-template <size_t size_log2>
-inline bool	parallel_task_queue<size_log2>::try_pop_task_queue(parallel_task &task) {
-	scoped_spin_lock _(_lock);
-	return _buffer.read(task);
+inline BOOL	parallel_task_queue::try_pop_task_queue(parallel_task &task) {
+	threading::scoped_spin_lock _(_lock);
+	return				_buffer.read(task);
 }
 
 class parallel_computer {
-	static constexpr int32_t MAX_WORKERS = 4; // 5
+	static constexpr s32 MAX_WORKERS = 4; // 5
 
-	svector<semaphore*, MAX_WORKERS> _workers_sem_feedback;
-	parallel_task_queue<5>	_task_queue; // 32 elements
-	volatile int32_t _thread_counter;
-	//semaphore _master_sem{ 1 }; // binary semaphore
-	volatile bool _stop_workers;
+	u_svector<threading::semaphore*, MAX_WORKERS> _workers_sem_feedback;
+	parallel_task_queue	_task_queue;
+	volatile BOOL		_stop_workers;
+	volatile s32		_thread_counter;
+	threading::semaphore _master_sem{ 1 }; // binary semaphore
 public:
-	parallel_comuter();
-	~parallel_compter();
-	void launch_task_and_wait(task_func *func, void *args, uint32_t work_size);
-private:
-	void assign_workload(vector<parallel_task> &tasks, uint32_t work_size, volatile s32 *chunk_counter, void *args, task_func *func, semaphore *sem);
-	void post_tasks(vector<parallel_task> &tasks);
+						parallel_computer	() : _stop_workers(false), _thread_counter(0) {}
 
-	static void worker_func(void *args);
+			void		initialize			();
+			void		deinitialize		();
+			void		launch_task_and_wait(task_func *func, void *args, u32 work_size);
+private:
+			void		assign_workload		(u_vector<parallel_task> &tasks, u32 work_size, volatile s32 *chunk_counter, void *args, task_func *func, threading::semaphore *sem);
+			void		post_tasks			(u_vector<parallel_task> &tasks);
+
+	static	void		worker_func			(void *args);
 };
