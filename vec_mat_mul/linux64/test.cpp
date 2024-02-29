@@ -14,11 +14,7 @@ typedef int32_t s32;
 typedef uint32_t u32;
 typedef uint64_t u64;
 
-constexpr u32 h = 1000;
-constexpr u32 w = 800;
-
 static constexpr u32 stride_avx = sizeof(__m256) / sizeof(fp32);
-static constexpr u32 stride_sse = sizeof(__m128) / sizeof(fp32);
 
 alignas(alignof(__m256i))
 static const u32 rem_mask_table[stride_avx][stride_avx] = {
@@ -33,7 +29,7 @@ static const u32 rem_mask_table[stride_avx][stride_avx] = {
 };
 
 extern "C" {
-void __vec_mat_mul_linux64(fp32* res, const u16* tensor, const fp32* vector,u32 width, u32 height);
+void multiply_matrix_by_vector_fp16_avx(const u16* tensor, const fp32* vector, fp32* res, u32 width, u32 height);
 }
 
 inline fp32 horizontal_add(const __m128& accum) {
@@ -44,7 +40,7 @@ inline fp32 horizontal_add(const __m128& accum) {
 	return _mm_cvtss_f32(sums);
 }
 
-void vec_mat_mul(fp32* res, const u16* tensor, const fp32* vector,u32 width, u32 height) {
+void vec_mat_mul(const u16* tensor, const fp32* vector, fp32* res, u32 width, u32 height) {
 	assert(0 == ((u64)vector & (sizeof(__m256) - 1)));
 	const u32 rem = height & (stride_avx - 1);
 	const u32 height_trunc = height - rem;
@@ -115,9 +111,9 @@ int main() {
 		generate_data(tensor, vector, w, h);
 
 
-		vec_mat_mul(result_a, tensor, vector, w, h);
+		vec_mat_mul(tensor, vector, result_a, w, h);
 
-		__vec_mat_mul_linux64(result_b, tensor, vector, w, h);
+		multiply_matrix_by_vector_fp16_avx(tensor, vector, result_b, w, h);
 
 		for (u32 i = 0; i < w; i++) {
 			//assert(fp_similar(result_a[i], result_b[i], 0.001f));
