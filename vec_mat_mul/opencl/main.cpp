@@ -58,6 +58,7 @@ struct apsp_cl {
     cl_device_id device_id = 0;
 
     cl_int move_memory_to_device(data* g_data);
+    cl_int move_constant_memory_to_device(data* g_data);
     cl_int move_memory_to_host(data* g_data);
 
     cl_int move_mapped_memory_to_device(data* g_data);
@@ -151,9 +152,7 @@ cl_int apsp_cl::destroy() {
 }
 
 cl_int apsp_cl::setup_and_run(data* g_data) {
-
-    cl_int ret = move_memory_to_device(g_data);
-    check_result("Failed moving memory to device.");
+    cl_int ret = CL_SUCCESS;
 
     const int num_rows = g_data->num_rows;
     const int num_cols = g_data->num_cols;
@@ -161,7 +160,6 @@ cl_int apsp_cl::setup_and_run(data* g_data) {
     // Execute the OpenCL kernel
     const size_t local_item_size = 0x80;
     const size_t global_item_size = multiple_of_n(num_rows, local_item_size);
-
 
     // check device capabilities
     cl_uint num_dim = 0;
@@ -185,8 +183,20 @@ cl_int apsp_cl::setup_and_run(data* g_data) {
     ret |= clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &global_item_size, &local_item_size, 0, NULL, NULL);
     check_result("Errors occured during kernel execution!");
 
-    ret = move_memory_to_host(g_data);
-    check_result("Failed moving memory to device.");
+    return ret;
+}
+
+cl_int apsp_cl::move_constant_memory_to_device(data* g_data) {
+    cl_int ret;
+
+    const int r = g_data->num_rows;
+    const int c = g_data->num_cols;
+    const int m_size_bytes = r * c * sizeof(uint16_t);
+    const uint8_t pattern = 0;
+
+    // Create memory buffers on the device for each vector 
+    objects[1] = clCreateBuffer(context, CL_MEM_READ_ONLY/* | CL_MEM_ALLOC_HOST_PTR*/, m_size_bytes, NULL, &ret);
+    ret = clEnqueueWriteBuffer(command_queue, objects[1], CL_TRUE, 0, m_size_bytes, g_data->matrix, 0, NULL, NULL);
 
     return ret;
 }
@@ -196,29 +206,13 @@ cl_int apsp_cl::move_memory_to_device(data* g_data) {
 
     const int r = g_data->num_rows;
     const int c = g_data->num_cols;
-    const int m_size_bytes = r * c * sizeof(uint16_t);
     const uint8_t pattern = 0;
 
     // Create memory buffers on the device for each vector 
     objects[0] = clCreateBuffer(context, CL_MEM_WRITE_ONLY/* | CL_MEM_ALLOC_HOST_PTR*/, r * sizeof(float), NULL, &ret);
-    objects[1] = clCreateBuffer(context, CL_MEM_READ_ONLY/* | CL_MEM_ALLOC_HOST_PTR*/, m_size_bytes, NULL, &ret);
     objects[2] = clCreateBuffer(context, CL_MEM_READ_ONLY/* | CL_MEM_ALLOC_HOST_PTR*/, c * sizeof(float), NULL, &ret);
+
     clEnqueueFillBuffer(command_queue, objects[0], &pattern, sizeof(pattern), 0, r * sizeof(float), 0, NULL, NULL);
-
-    // Copy data to their respective memory buffers
-    //void *ptr = nullptr; 
-    //ptr = clEnqueueMapBuffer(command_queue, objects[1], CL_TRUE, CL_MAP_WRITE, 0, m_size_bytes, 0, NULL, NULL, &ret);
-    //check_result("Errors occured mapping device memory!");
-    //memcpy(ptr, g_data->matrix, m_size_bytes);
-    //ret = clEnqueueUnmapMemObject(command_queue, objects[1], ptr, 0, NULL, NULL);
-    //check_result("Errors occured unmapping device memory!");
-    //ptr = clEnqueueMapBuffer(command_queue, objects[2], CL_TRUE, CL_MAP_WRITE, 0, c * sizeof(float), 0, NULL, NULL, &ret);
-    //check_result("Errors occured mapping device memory!");
-    //memcpy(ptr, g_data->vector_aligned(), c * sizeof(float));
-    //ret = clEnqueueUnmapMemObject(command_queue, objects[2], ptr, 0, NULL, NULL);
-    //check_result("Errors occured unmapping device memory!");
-
-    ret |= clEnqueueWriteBuffer(command_queue, objects[1], CL_TRUE, 0, m_size_bytes, g_data->matrix, 0, NULL, NULL);
     ret |= clEnqueueWriteBuffer(command_queue, objects[2], CL_TRUE, 0, c * sizeof(float), g_data->vector_aligned(), 0, NULL, NULL);
 
     return ret;
@@ -227,11 +221,6 @@ cl_int apsp_cl::move_memory_to_device(data* g_data) {
 cl_int apsp_cl::move_memory_to_host(data* g_data) {
     cl_int ret;
 
-    //void* ptr = clEnqueueMapBuffer(command_queue, objects[0], CL_TRUE, CL_MAP_READ, 0, g_data->num_rows * sizeof(float), 0, NULL, NULL, &ret);
-    //check_result("Errors occured mapping device memory!");
-    //memcpy(g_data->result, ptr, g_data->num_rows * sizeof(float));
-    //ret = clEnqueueUnmapMemObject(command_queue, objects[0], ptr, 0, NULL, NULL);
-    //check_result("Errors occured unmapping device memory!");
     ret = clEnqueueReadBuffer(command_queue, objects[0], CL_TRUE, 0, g_data->num_rows * sizeof(float), g_data->result, 0, NULL, NULL);
 
     ret |= clReleaseMemObject(objects[0]);
@@ -242,8 +231,6 @@ cl_int apsp_cl::move_memory_to_host(data* g_data) {
 }
 
 //----------------------------------------------
-
-#define USE_HALF_FLOAT
 
 typedef float fp32;
 typedef uint8_t u8;
@@ -259,13 +246,11 @@ constexpr u32 r = 1000;
 template <typename T>
 bool	fp_similar(T a, T b, T cmp = T(0.00001f)) { return abs(a - b) <= cmp; }
 
-template <typename T>
-void generate_data(T* tensor, fp32* vector, u32 height, u32 width) {
+void generate_data(fp16* tensor, fp32* vector, u32 height, u32 width) {
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_real_distribution<float> fp_distr(0.0f, 1.0f);
 
-    constexpr bool is_half_float = (sizeof(T) == sizeof(fp16));
     // fill vector
     for (u32 h = 0; h < height; h++) {
         vector[h] = fp_distr(gen);
@@ -273,51 +258,47 @@ void generate_data(T* tensor, fp32* vector, u32 height, u32 width) {
     alignas(alignof(__m128)) float ps[sizeof(__m128) / sizeof(fp32)];
     // fill tensor
     for (u32 w = 0; w < width; w++) {
-        T* t_row = (T*)&tensor[w * height];
+        fp16* t_row = &tensor[w * height];
         for (u32 h = 0; h < height; h++) {
             ps[0] = fp_distr(gen);
             ps[1] = fp_distr(gen);
             ps[2] = fp_distr(gen);
             ps[3] = fp_distr(gen);
-            if (is_half_float) {
-                __m128i ph = _mm_cvtps_ph(*(__m128*)ps, 0);
-                _mm_storeu_si64((void*)&t_row[h], ph);
-            }
-            else {
-                _mm_storeu_ps((fp32*)&t_row[h], *(__m128*)ps);
-            }
+            __m128i ph = _mm_cvtps_ph(*(__m128*)ps, 0);
+            _mm_storeu_si64((void*)&t_row[h], ph);
+
         }
     }
 }
 
-template <typename T>
-void vec_mat_mul(fp32* res, const T* tensor, const fp32* vector, u32 height, u32 width);
-
-template <typename T>
-void simple_vec_mat_mul(fp32* res, const T* tensor, const fp32* vector, u32 height, u32 width);
+void vec_mat_mul(fp32* res, const fp16* tensor, const fp32* vector, u32 height, u32 width);
 
 //int main() {
+//    cl_int ret = CL_SUCCESS;
+//
 //    data c_data(r, c);
 //    generate_data(c_data.matrix, c_data.vector_aligned(), c_data.num_cols, c_data.num_rows);
 //    memset(c_data.result, 0, c_data.num_rows * sizeof(fp32));
 //
 //    apsp_cl context;
-//    context.init();
-//    context.setup_and_run(&c_data);
-//    context.destroy();
+//    ret = context.init();
+//    check_result("init");
+//    ret = context.move_constant_memory_to_device(&c_data);
+//    check_result("move_constant_memory_to_device");
+//    ret = context.move_memory_to_device(&c_data);
+//    check_result("move_memory_to_device");
+//    ret = context.setup_and_run(&c_data);
+//    check_result("setup_and_run");
+//    ret = context.move_memory_to_host(&c_data);
+//    check_result("move_memory_to_host");
+//    ret = context.destroy();
+//    check_result("destroy");
 //
-//    typedef __m256 m_reg;
-//    alignas(alignof(m_reg)) fp32 result_b[r];
-//    alignas(alignof(m_reg)) fp32 result_c[r];
+//    alignas(alignof(__m256)) fp32 result_b[r];
 //    memset(result_b, 0, r * sizeof(fp32));
-//    memset(result_c, 0, r * sizeof(fp32));
 //    vec_mat_mul(result_b, c_data.matrix, c_data.vector_aligned(), c, r);
-//    simple_vec_mat_mul(result_c, c_data.matrix, c_data.vector_aligned(), c, r);
 //
 //    for (u32 i = 0; i < r; i++) {
-//        if (!fp_similar(result_c[i], result_b[i], 0.001f)) {
-//            printf("result_b[%d]: %.4f != result_c[%d]: %.4f\n", i, c_data.result[i], i, result_b[i]);
-//        }
 //        if (!fp_similar(c_data.result[i], result_b[i], 0.001f)) {
 //            printf("result_a[%d]: %.4f != result_b[%d]: %.4f\n", i, c_data.result[i], i, result_b[i]);
 //        }
@@ -327,7 +308,6 @@ void simple_vec_mat_mul(fp32* res, const T* tensor, const fp32* vector, u32 heig
 //}
 
 static constexpr u32 stride_avx = sizeof(__m256) / sizeof(fp32);
-static constexpr u32 stride_sse = sizeof(__m128) / sizeof(fp32);
 
 alignas(alignof(__m256i))
 static const u32 rem_mask_table[stride_avx][stride_avx] = {
@@ -349,83 +329,32 @@ inline fp32 horizontal_add(const __m128& accum) {
     return _mm_cvtss_f32(sums);
 }
 
-template <typename T>
-void vec_mat_mul(fp32* res, const T* tensor, const fp32* vector, u32 height, u32 width) {	// height == row, width = col
-    constexpr bool is_half_float = (sizeof(T) == sizeof(fp16));
-    static_assert(sizeof(T) == sizeof(fp16) || sizeof(T) == sizeof(fp32), "Unsupported type");
-    assert(0 == ((u64)vector & (sizeof(__m256) - 1)));
+void vec_mat_mul(fp32* res, const fp16* tensor, const fp32* vector, u32 height, u32 width) {	// height == row, width = col
     const u32 rem = height & (stride_avx - 1);
     const u32 height_trunc = height - rem;
     const u32 rem_offset = height_trunc - (stride_avx - rem);
-    if (is_half_float) { // compile time branch
-        const __m256i rem_mask = _mm256_load_si256((__m256i*)rem_mask_table[rem]);
-        __m256 rem_vec = _mm256_maskload_ps(&vector[rem_offset], rem_mask);
-        const fp16* t_row = (fp16*)tensor;
-        for (u32 w = 0; w < width; w++, t_row += height) {
-            fp32* out = &res[w];
-            __m256 accum_256 = _mm256_setzero_ps();
-            for (u32 h = 0; h < height_trunc; h += stride_avx) {
-                __m128i t_ph = _mm_loadu_si128((__m128i*)(&t_row[h]));
-                __m256 t_ps = _mm256_cvtph_ps(t_ph);
-                t_ps = _mm256_mul_ps(t_ps, *(__m256*)(vector + h));
-                accum_256 = _mm256_add_ps(accum_256, t_ps);
-            }
-            // compute reminder chunk
-            __m128i t_ph = _mm_loadu_si128((__m128i*)(&t_row[rem_offset]));
-            __m256 t_ps = _mm256_cvtph_ps(t_ph);
-            t_ps = _mm256_mul_ps(t_ps, rem_vec);
-            accum_256 = _mm256_add_ps(accum_256, t_ps);
-            // horizontal add
-            __m128 hi = _mm256_extractf128_ps(accum_256, 1);
-            __m128 accum = _mm_add_ps(hi, *(__m128*) & accum_256);
-            *out = horizontal_add(accum);
-        }
-    }
-    else {
-        __m256i rem_mask = _mm256_load_si256((__m256i*)rem_mask_table[rem]);
-        __m256 rem_vec = _mm256_maskload_ps(&vector[rem_offset], rem_mask);
-        const fp32* t_row = (fp32*)tensor;
-        for (u32 w = 0; w < width; w++, t_row += height) {
-            fp32* out = &res[w];
-            __m256 accum_256 = _mm256_setzero_ps();
-            for (u32 h = 0; h < height_trunc; h += stride_avx) {
-                __m256 t_ps = _mm256_loadu_ps(&t_row[h]);
-                t_ps = _mm256_mul_ps(t_ps, *(__m256*)(vector + h));
-                accum_256 = _mm256_add_ps(accum_256, t_ps);
-            }
-            // compute reminder chunk
-            __m256 t_ps = _mm256_loadu_ps(&t_row[rem_offset]);
-            t_ps = _mm256_mul_ps(t_ps, rem_vec);
-            accum_256 = _mm256_add_ps(accum_256, t_ps);
-            // horizontal add
-            __m128 hi = _mm256_extractf128_ps(accum_256, 1);
-            __m128 accum = _mm_add_ps(hi, *(__m128*) & accum_256);
-            *out = horizontal_add(accum);
-        }
-    }
-}
-
-static fp32 half_to_float(fp16 h) {
-    const u32 e = (h & 0x7C00);
-    const u32 f = ((h & 0x8000) << 16) | ((e == 0) - 1) & (((e + 0x1C000) | (h & 0x03FF)) << 13);
-    return *(fp32*)&f;
-}
-
-template <typename T>
-void simple_vec_mat_mul(fp32* res, const T* tensor, const fp32* vector, u32 height, u32 width) {
-    static_assert(sizeof(T) == sizeof(fp16) || sizeof(T) == sizeof(fp32), "Unsupported type");
-    constexpr bool is_half_float = (sizeof(T) == sizeof(fp16));
-    for (u32 w = 0; w < width; w++) {
-        for (u32 h = 0; h < height; h++) {
-            if (is_half_float) { // compile time branch
-                const fp32 f = half_to_float(tensor[w * height + h]);
-                res[w] += f * vector[h];
-            }
-            else {
-                res[w] += tensor[w * height + h] * vector[h];
-            }
-        }
-    }
+       const __m256i rem_mask = _mm256_load_si256((__m256i*)rem_mask_table[rem]);
+       __m256 rem_vec = _mm256_maskload_ps(&vector[rem_offset], rem_mask);
+       const fp16* t_row = (fp16*)tensor;
+       for (u32 w = 0; w < width; w++, t_row += height) {
+           fp32* out = &res[w];
+           __m256 accum_256 = _mm256_setzero_ps();
+           for (u32 h = 0; h < height_trunc; h += stride_avx) {
+               __m128i t_ph = _mm_loadu_si128((__m128i*)(&t_row[h]));
+               __m256 t_ps = _mm256_cvtph_ps(t_ph);
+               t_ps = _mm256_mul_ps(t_ps, *(__m256*)(vector + h));
+               accum_256 = _mm256_add_ps(accum_256, t_ps);
+           }
+           // compute reminder chunk
+           __m128i t_ph = _mm_loadu_si128((__m128i*)(&t_row[rem_offset]));
+           __m256 t_ps = _mm256_cvtph_ps(t_ph);
+           t_ps = _mm256_mul_ps(t_ps, rem_vec);
+           accum_256 = _mm256_add_ps(accum_256, t_ps);
+           // horizontal add
+           __m128 hi = _mm256_extractf128_ps(accum_256, 1);
+           __m128 accum = _mm_add_ps(hi, *(__m128*) & accum_256);
+           *out = horizontal_add(accum);
+       }
 }
 
 ////////////////////////////////////////////////////////
@@ -434,18 +363,10 @@ static void vec_mat_mul(benchmark::State& state) {
     const u32 height = c;
     const u32 width = r;
 
-#ifdef USE_HALF_FLOAT
-    typedef fp16 f_type;
-#else	// USE_HALF_FLOAT
-    typedef fp32 f_type;
-#endif	// USE_HALF_FLOAT
-
-    typedef __m256 m_reg;
-
-    alignas(alignof(m_reg)) fp32 vector[c];
-    f_type* tensor = (f_type*)malloc(r * c * sizeof(f_type) + sizeof(m_reg));
+    alignas(alignof(__m256)) fp32 vector[c];
+    fp16* tensor = (fp16*)malloc(r * c * sizeof(fp16) + sizeof(__m256));
     generate_data(tensor, vector, c, r);
-    alignas(alignof(m_reg)) fp32 result_a[r];
+    alignas(alignof(__m256)) fp32 result_a[r];
     for (auto _ : state) {
         vec_mat_mul(result_a, tensor, vector, height, width);
         benchmark::DoNotOptimize(result_a);
@@ -457,26 +378,21 @@ static void vec_mat_mul_cl(benchmark::State& state) {
     const u32 height = c;
     const u32 width = r;
 
-#ifdef USE_HALF_FLOAT
-    typedef fp16 f_type;
-#else	// USE_HALF_FLOAT
-    typedef fp32 f_type;
-#endif	// USE_HALF_FLOAT
-
-    typedef __m256 m_reg;
-
     data c_data(r, c);
     generate_data(c_data.matrix, c_data.vector_aligned(), c_data.num_cols, c_data.num_rows);
     memset(c_data.result, 0, c_data.num_rows * sizeof(fp32));
 
     apsp_cl context;
     context.init();
-
+    context.move_constant_memory_to_device(&c_data);
+    context.move_memory_to_device(&c_data);
     for (auto _ : state) {
+        //context.move_memory_to_device(&c_data);
         context.setup_and_run(&c_data);
+       // context.move_memory_to_host(&c_data);
         benchmark::DoNotOptimize(c_data.result);
     }
-
+    context.move_memory_to_host(&c_data);
     context.destroy();
 }
 
