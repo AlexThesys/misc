@@ -158,7 +158,7 @@ cl_int apsp_cl::setup_and_run(data* g_data) {
     const int num_cols = g_data->num_cols;
 
     // Execute the OpenCL kernel
-    const size_t local_item_size = 0x80;
+    const size_t local_item_size = 0x40;
     const size_t global_item_size = multiple_of_n(num_rows, local_item_size);
 
     // check device capabilities
@@ -241,7 +241,7 @@ typedef uint32_t u32;
 typedef uint64_t u64;
 
 constexpr u32 c = 512;
-constexpr u32 r = 1000;
+constexpr u32 r = 512;
 
 template <typename T>
 bool	fp_similar(T a, T b, T cmp = T(0.00001f)) { return abs(a - b) <= cmp; }
@@ -333,28 +333,28 @@ void vec_mat_mul(fp32* res, const fp16* tensor, const fp32* vector, u32 height, 
     const u32 rem = height & (stride_avx - 1);
     const u32 height_trunc = height - rem;
     const u32 rem_offset = height_trunc - (stride_avx - rem);
-       const __m256i rem_mask = _mm256_load_si256((__m256i*)rem_mask_table[rem]);
-       __m256 rem_vec = _mm256_maskload_ps(&vector[rem_offset], rem_mask);
-       const fp16* t_row = (fp16*)tensor;
-       for (u32 w = 0; w < width; w++, t_row += height) {
-           fp32* out = &res[w];
-           __m256 accum_256 = _mm256_setzero_ps();
-           for (u32 h = 0; h < height_trunc; h += stride_avx) {
-               __m128i t_ph = _mm_loadu_si128((__m128i*)(&t_row[h]));
-               __m256 t_ps = _mm256_cvtph_ps(t_ph);
-               t_ps = _mm256_mul_ps(t_ps, *(__m256*)(vector + h));
-               accum_256 = _mm256_add_ps(accum_256, t_ps);
-           }
-           // compute reminder chunk
-           __m128i t_ph = _mm_loadu_si128((__m128i*)(&t_row[rem_offset]));
-           __m256 t_ps = _mm256_cvtph_ps(t_ph);
-           t_ps = _mm256_mul_ps(t_ps, rem_vec);
-           accum_256 = _mm256_add_ps(accum_256, t_ps);
-           // horizontal add
-           __m128 hi = _mm256_extractf128_ps(accum_256, 1);
-           __m128 accum = _mm_add_ps(hi, *(__m128*) & accum_256);
-           *out = horizontal_add(accum);
-       }
+    const __m256i rem_mask = _mm256_load_si256((__m256i*)rem_mask_table[rem]);
+    __m256 rem_vec = _mm256_maskload_ps(&vector[rem_offset], rem_mask);
+    const fp16* t_row = (fp16*)tensor;
+    for (u32 w = 0; w < width; w++, t_row += height) {
+        fp32* out = &res[w];
+        __m256 accum_256 = _mm256_setzero_ps();
+        for (u32 h = 0; h < height_trunc; h += stride_avx) {
+            __m128i t_ph = _mm_loadu_si128((__m128i*)(&t_row[h]));
+            __m256 t_ps = _mm256_cvtph_ps(t_ph);
+            t_ps = _mm256_mul_ps(t_ps, *(__m256*)(vector + h));
+            accum_256 = _mm256_add_ps(accum_256, t_ps);
+        }
+        // compute reminder chunk
+        __m128i t_ph = _mm_loadu_si128((__m128i*)(&t_row[rem_offset]));
+        __m256 t_ps = _mm256_cvtph_ps(t_ph);
+        t_ps = _mm256_mul_ps(t_ps, rem_vec);
+        accum_256 = _mm256_add_ps(accum_256, t_ps);
+        // horizontal add
+        __m128 hi = _mm256_extractf128_ps(accum_256, 1);
+        __m128 accum = _mm_add_ps(hi, *(__m128*) & accum_256);
+        *out = horizontal_add(accum);
+    }
 }
 
 ////////////////////////////////////////////////////////
@@ -389,7 +389,7 @@ static void vec_mat_mul_cl(benchmark::State& state) {
     for (auto _ : state) {
         //context.move_memory_to_device(&c_data);
         context.setup_and_run(&c_data);
-       // context.move_memory_to_host(&c_data);
+        // context.move_memory_to_host(&c_data);
         benchmark::DoNotOptimize(c_data.result);
     }
     context.move_memory_to_host(&c_data);
