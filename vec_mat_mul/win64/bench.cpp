@@ -1,3 +1,4 @@
+#define BENCHMARK_STATIC_DEFINE
 #include "benchmark/benchmark.h"
 
 #include <stdint.h>
@@ -45,7 +46,7 @@ inline fp32 horizontal_add(const __m128& accum) {
 	return _mm_cvtss_f32(sums);
 }
 
-void __attribute__ ((noinline)) vec_mat_mul(const u16* tensor, const fp32* vector, fp32* res, u32 width, u32 height) {
+void __declspec(noinline) vec_mat_mul(const u16* tensor, const fp32* vector, fp32* res, u32 width, u32 height) {
 	assert(0 == ((u64)vector & (sizeof(__m256) - 1)));
 	const u32 rem = height & (stride_avx - 1);
 	const u32 height_trunc = height - rem;
