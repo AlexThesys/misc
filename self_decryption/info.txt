@@ -1,0 +1,3 @@
+client_app 			-- the application that decrypts and re-encrypts it's code + client side to recieve the decryption keys
+decryption_server 	-- the server that provides the encryption keys upon integrity validation
+encryption_script 	-- a script to encrypt the application code in the first place
