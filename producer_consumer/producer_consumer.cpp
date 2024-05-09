@@ -1,8 +1,9 @@
 // consumer thread can wait for data, but producer can't be blocked
+// data_buffer might be a vector for example
+template <typename data_buffer>
 class producer_consumer {
     public:
         static constexpr u64 guard = u64(-1);
-        typedef vector<data> data_buffer;
     private:
         data_buffer _front_buf;
         data_buffer _back_buf;
@@ -10,11 +11,11 @@ class producer_consumer {
         data_buffer *_back_buf_ptr;
         volatile data_buffer *_shared_buf_ptr;
         data_buffer *_save_buf_ptr;
-        volatile u32		_new_data_ready;
-        volatile u32		_stop_consumption;    // consumer is going to run a while loop, and this is the exit condition
-        semaphore _sem{/*max_count=*/ 1 };	// binary semaphore
+        volatile u32 _new_data_ready;
+        volatile u32 _stop_consumption;    // consumer is going to run a while loop, and this is the exit condition
+        semaphore _sem;	// binary semaphore
     public:
-        producer_consumer ()	:	_front_buf_ptr(&_front_buf), _back_buf_ptr(&_back_buf), _shared_buf_ptr(_back_buf_ptr), _save_buf_ptr(nullptr),
+        producer_consumer () : _front_buf_ptr(&_front_buf), _back_buf_ptr(&_back_buf), _shared_buf_ptr(_back_buf_ptr), _save_buf_ptr(nullptr),
                                         _new_data_ready(0), _stop_consumption(0) {
             create_thread(consume_data_mt, (pvoid)(this));
         }
@@ -26,8 +27,8 @@ class producer_consumer {
         }
         // called from the producer thread
         data_buffer &begin_producing()		{
-            _save_buf_ptr	= (data_buffer*)(atomic_xchg(((volatile u64*)&_shared_buf_ptr), guard));
-            return			*_save_buf_ptr;
+            _save_buf_ptr = (data_buffer*)(atomic_xchg(((volatile u64*)&_shared_buf_ptr), guard));
+            return *_save_buf_ptr;
         }
         void end_producing() {
             atomic_store((volatile u64&)_shared_buf_ptr, (u64)_save_buf_ptr);
@@ -36,10 +37,10 @@ class producer_consumer {
         }
     private:
         // called from the consumer thread
-            data_buffer &begin_consuming() {
-            wait_for_data	();
-            swap			(_front_buf_ptr, _back_buf_ptr);	// doesn't need to be atomic
-            return			*_front_buf_ptr;
+        data_buffer &begin_consuming() {
+            wait_for_data();
+            swap(_front_buf_ptr, _back_buf_ptr);	// doesn't need to be atomic
+            return *_front_buf_ptr;
         }
         void end_consuming() {
             _front_buf_ptr->clear();
