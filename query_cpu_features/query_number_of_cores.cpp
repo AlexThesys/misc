@@ -79,6 +79,7 @@ void get_processor_info(WORD target_group)
                 for (; mask; mask &= (mask - 1)) {
                     lp_count++;
                 }
+				//lp_count = ((info->Processor.Flags == LTP_PC_SMT) ? __popcnt(info->Processor.GroupMask[0].Mask) : 1);
                 if (lp_count) {
                     logical_processor_count += lp_count;
                     if (info->Processor.EfficiencyClass == 0) {
