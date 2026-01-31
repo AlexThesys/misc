@@ -1,0 +1,2 @@
+nasm -f win64 check_peb.asm -o check_peb.obj
+LIB /OUT:check_peb.lib check_peb.obj
